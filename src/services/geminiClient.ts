@@ -114,3 +114,50 @@ export async function regenerateEmailTone(
   const json = await res.json();
   return json.data;
 }
+
+/**
+ * Uploads a recorded audio file to the backend and returns its transcription.
+ * The server uses Gemini's multimodal audio input to produce a clean transcript.
+ *
+ * @param file     The audio File object from the file input or drag-and-drop.
+ * @param signal   Optional AbortSignal to cancel the request.
+ */
+export async function transcribeAudioFile(
+  file: File,
+  signal?: AbortSignal,
+): Promise<{ transcript: string; wordCount: number; fileName: string }> {
+  const arrayBuffer = await file.arrayBuffer();
+
+  const res = await fetch('/api/transcribe', {
+    method: 'POST',
+    headers: {
+      'Content-Type': file.type || 'audio/mpeg',
+      'X-File-Name': encodeURIComponent(file.name),
+    },
+    body: arrayBuffer,
+    signal,
+  });
+
+  if (!res.ok) {
+    const errorJson = await res.json().catch(() => ({}));
+    throw new Error(
+      errorJson.message ||
+        (res.status === 413
+          ? 'File is too large. Please upload a recording under 20 MB.'
+          : res.status === 415
+          ? 'Unsupported audio format. Try MP3, M4A, WAV, or WebM.'
+          : `Transcription failed (${res.status})`),
+    );
+  }
+
+  const json = await res.json();
+  if (!json.data?.transcript) {
+    throw new Error('Received an empty transcript from the server.');
+  }
+
+  return {
+    transcript: json.data.transcript,
+    wordCount: json.data.wordCount ?? 0,
+    fileName: json.data.fileName ?? file.name,
+  };
+}

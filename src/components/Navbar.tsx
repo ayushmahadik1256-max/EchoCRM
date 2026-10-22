@@ -10,6 +10,7 @@ import {
   HelpCircle,
 } from 'lucide-react';
 import { useAuth } from '../hooks/useAuth';
+import { ScrollProgressBar } from './visuals/ScrollProgressBar';
 
 interface NavbarProps {
   currentView: 'landing' | 'new' | 'history' | 'results';
@@ -154,6 +155,9 @@ export const Navbar: React.FC<NavbarProps> = ({
             )}
           </div>
         </div>
+
+        {/* Scroll progress rail */}
+        <ScrollProgressBar />
       </header>
 
       {/* Mobile Floating Glass Bottom Dock (< 768px) */}

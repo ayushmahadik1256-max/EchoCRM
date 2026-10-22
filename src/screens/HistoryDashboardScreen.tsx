@@ -20,6 +20,11 @@ import {
 import { DebriefDocument, DealStage, DebriefStatus } from '../types';
 import { GlassCard } from '../components/GlassCard';
 import { TiltCard } from '../components/TiltCard';
+import { LedgerAnalytics } from '../components/visuals/LedgerAnalytics';
+import { AnimatedNumber } from '../components/visuals/AnimatedNumber';
+import { PipelineFunnel } from '../components/visuals/PipelineFunnel';
+import { AuroraBackdrop } from '../components/visuals/AuroraBackdrop';
+import { SpotlightCard } from '../components/visuals/SpotlightCard';
 
 interface HistoryDashboardScreenProps {
   debriefs: DebriefDocument[];
@@ -81,6 +86,25 @@ export const HistoryDashboardScreen: React.FC<HistoryDashboardScreenProps> = ({
     });
 
     return { total, openCount, overdueCount, todayCount, doneCount };
+  }, [debriefs]);
+
+  // Deal-stage distribution for the pipeline funnel
+  const stageDistribution = useMemo(() => {
+    const order: DealStage[] = [
+      'Lead',
+      'Discovery',
+      'Proposal',
+      'Negotiation',
+      'Closed Won',
+      'Closed Lost',
+    ];
+
+    return order
+      .map((stage) => ({
+        label: stage,
+        value: debriefs.filter((d) => d.dealStage === stage).length,
+      }))
+      .filter((s) => s.value > 0);
   }, [debriefs]);
 
   // Filter and sort items
@@ -236,18 +260,77 @@ export const HistoryDashboardScreen: React.FC<HistoryDashboardScreenProps> = ({
             color: metrics.todayCount > 0 ? 'text-amber-600' : 'text-[#5B6B7F]',
           },
           { label: 'Completed', value: metrics.doneCount, color: 'text-emerald-600' },
-        ].map((kpi) => (
+        ].map((kpi, idx) => (
           <TiltCard key={kpi.label} maxTilt={7} scale={1.03}>
-            <GlassCard className="p-4 bg-white/80 border border-white/90 shadow-[0_8px_24px_rgba(26,115,217,0.08)]">
-              <div className="text-[11px] font-bold text-[#5B6B7F] uppercase tracking-wider">
-                {kpi.label}
-              </div>
-              <div className={`text-xl font-extrabold font-mono tabular-nums mt-1 ${kpi.color}`}>
-                {kpi.value}
-              </div>
-            </GlassCard>
+            <SpotlightCard className="rounded-[20px] h-full">
+              <GlassCard className="p-4 bg-white/80 border border-white/90 shadow-[0_8px_24px_rgba(26,115,217,0.08)] h-full relative overflow-hidden">
+                <div
+                  aria-hidden="true"
+                  className="absolute -top-10 -right-8 w-24 h-24 rounded-full bg-[#CFE6FF]/40 blur-2xl pointer-events-none"
+                />
+                <div className="relative">
+                  <div className="text-[11px] font-bold text-[#5B6B7F] uppercase tracking-wider">
+                    {kpi.label}
+                  </div>
+                  <div
+                    className={`text-xl font-extrabold font-mono tabular-nums mt-1 ${kpi.color}`}
+                  >
+                    <AnimatedNumber value={kpi.value} durationMs={700 + idx * 90} />
+                  </div>
+                  {/* Micro progress rail */}
+                  <div className="mt-2 h-1 w-full rounded-full bg-[#E4F1FF] overflow-hidden">
+                    <div
+                      className="h-full rounded-full bg-gradient-to-r from-[#AFD3FA] to-[#1A73D9] transition-[width] duration-700 ease-out"
+                      style={{
+                        width: `${
+                          metrics.total > 0
+                            ? Math.max(
+                                6,
+                                (kpi.value / metrics.total) * 100,
+                              )
+                            : 0
+                        }%`,
+                      }}
+                    />
+                  </div>
+                </div>
+              </GlassCard>
+            </SpotlightCard>
           </TiltCard>
         ))}
+      </div>
+
+      {/* Analytics + Pipeline Snapshot */}
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 mb-6">
+        <div className="lg:col-span-2">
+          <LedgerAnalytics debriefs={debriefs} />
+        </div>
+
+        <SpotlightCard className="rounded-2xl h-full">
+          <GlassCard className="p-4 sm:p-5 bg-white/85 border border-white/95 shadow-[0_8px_24px_rgba(26,115,217,0.06)] h-full relative overflow-hidden">
+            <AuroraBackdrop intensity={0.5} showGrid={false} />
+
+            <div className="relative flex items-center justify-between mb-3">
+              <span className="text-[11px] font-bold uppercase tracking-wider text-[#0F172A] flex items-center gap-1.5">
+                <Layers className="w-3.5 h-3.5 text-[#1A73D9]" />
+                Pipeline Snapshot
+              </span>
+              <span className="text-[11px] font-mono text-[#5B6B7F] tabular-nums">
+                {stageDistribution.length} stage{stageDistribution.length === 1 ? '' : 's'}
+              </span>
+            </div>
+
+            {stageDistribution.length > 0 ? (
+              <div className="relative">
+                <PipelineFunnel stages={stageDistribution} />
+              </div>
+            ) : (
+              <div className="relative h-[220px] flex items-center justify-center text-xs text-[#5B6B7F] text-center px-4">
+                No debriefs have reached a tracked deal stage yet.
+              </div>
+            )}
+          </GlassCard>
+        </SpotlightCard>
       </div>
 
       {/* Sticky Filter & Search Toolbar */}

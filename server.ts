@@ -1,8 +1,10 @@
 import express, { Request, Response } from 'express';
+import { createServer } from 'http';
 import dotenv from 'dotenv';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import { GoogleGenAI, Type } from '@google/genai';
+import multer from 'multer';
 
 dotenv.config();
 
@@ -14,6 +16,31 @@ const PORT = process.env.PORT ? parseInt(process.env.PORT, 10) : 3000;
 const MODEL_NAME = process.env.GEMINI_MODEL || 'gemini-2.5-flash';
 
 app.use(express.json({ limit: '2mb' }));
+
+// ─── Multer — in-memory audio upload (25 MB max) ─────────────────────────────
+const SUPPORTED_AUDIO_MIMES = new Set([
+  'audio/mp4',
+  'audio/mpeg',
+  'audio/mp3',
+  'audio/wav',
+  'audio/ogg',
+  'audio/webm',
+  'audio/x-m4a',
+  'audio/aac',
+  'audio/flac',
+]);
+
+const audioUpload = multer({
+  storage: multer.memoryStorage(),
+  limits: { fileSize: 25 * 1024 * 1024 }, // 25 MB
+  fileFilter: (_req, file, cb) => {
+    if (SUPPORTED_AUDIO_MIMES.has(file.mimetype)) {
+      cb(null, true);
+    } else {
+      cb(new Error(`Unsupported audio format: ${file.mimetype}. Supported: mp3, mp4, wav, ogg, webm, m4a, aac, flac`));
+    }
+  },
+});
 
 // Full debrief response schema
 const fullDebriefSchema = {
@@ -384,22 +411,158 @@ Generate the structured JSON debrief containing:
   }
 });
 
+// ---------------------------------------------------------------------------
+// Audio transcription (upload a recorded call, get clean notes back)
+// ---------------------------------------------------------------------------
+
+const TRANSCRIBE_SYSTEM_INSTRUCTION = `You are EchoCRM's call transcription engine.
+You receive an audio recording of a sales or client call. Produce a faithful, readable transcript.
+
+Strict rules:
+- Transcribe what was actually said. Do not summarize, shorten, or invent.
+- Keep speaker turns readable: prefix each change of speaker with "Speaker 1:", "Speaker 2:" (use names only when clearly stated).
+- Preserve every number, metric, date, price, company name, and person mentioned.
+- Drop pure filler ("um", "uh") and false starts, but keep self-corrections such as "Tuesday, sorry, Wednesday".
+- If a section is unintelligible, write "[inaudible]" instead of guessing.
+- Output plain text only: no markdown fences, no commentary, no headings.`;
+
+const AUDIO_MIME_ALLOWLIST = new Set([
+  'audio/mpeg',
+  'audio/mp3',
+  'audio/mp4',
+  'audio/m4a',
+  'audio/x-m4a',
+  'audio/wav',
+  'audio/x-wav',
+  'audio/wave',
+  'audio/webm',
+  'audio/ogg',
+  'audio/flac',
+  'audio/x-flac',
+  'audio/aac',
+  'video/webm',
+  'video/mp4',
+]);
+
+const MAX_AUDIO_BYTES = 20 * 1024 * 1024; // Gemini inline data request ceiling
+
+app.post(
+  '/api/transcribe',
+  express.raw({ type: () => true, limit: '24mb' }),
+  async (req: Request, res: Response) => {
+    try {
+      const mimeType = String(req.headers['content-type'] || '')
+        .split(';')[0]
+        .trim()
+        .toLowerCase();
+      const fileNameHeader = req.headers['x-file-name'];
+      const fileName = fileNameHeader
+        ? decodeURIComponent(String(fileNameHeader))
+        : 'call-recording';
+
+      const audio = req.body as Buffer;
+
+      if (!Buffer.isBuffer(audio) || audio.length === 0) {
+        return res.status(400).json({
+          error: 'INVALID_INPUT',
+          message: 'No audio data received. Please choose an audio file and try again.',
+        });
+      }
+
+      if (!AUDIO_MIME_ALLOWLIST.has(mimeType)) {
+        return res.status(415).json({
+          error: 'UNSUPPORTED_MEDIA_TYPE',
+          message: `Unsupported audio format "${mimeType || 'unknown'}". Use MP3, M4A, WAV, WebM, OGG, FLAC, or MP4.`,
+        });
+      }
+
+      if (audio.length > MAX_AUDIO_BYTES) {
+        return res.status(413).json({
+          error: 'FILE_TOO_LARGE',
+          message: 'Recording is larger than 20MB. Please upload a shorter clip or compress the audio.',
+        });
+      }
+
+      const apiKey = process.env.GEMINI_API_KEY;
+      if (!apiKey) {
+        console.error('GEMINI_API_KEY environment variable is not configured.');
+        return res.status(500).json({
+          error: 'CONFIG_ERROR',
+          message: 'Server Gemini API key is missing. Please ensure GEMINI_API_KEY is configured.',
+        });
+      }
+
+      const ai = new GoogleGenAI({
+        apiKey,
+        httpOptions: { headers: { 'User-Agent': 'aistudio-build' } },
+      });
+
+      const response = await ai.models.generateContent({
+        model: MODEL_NAME,
+        contents: [
+          {
+            role: 'user',
+            parts: [
+              { inlineData: { mimeType, data: audio.toString('base64') } },
+              {
+                text: 'Transcribe this client call recording following the rules exactly.',
+              },
+            ],
+          },
+        ],
+        config: {
+          systemInstruction: TRANSCRIBE_SYSTEM_INSTRUCTION,
+          temperature: 0.1,
+        },
+      });
+
+      const transcript = (response.text || '').trim();
+      if (!transcript) {
+        throw new Error('The recording could not be transcribed. It may be silent or corrupted.');
+      }
+
+      return res.json({
+        data: {
+          transcript,
+          fileName,
+          mimeType,
+          bytes: audio.length,
+          wordCount: transcript.split(/\s+/).filter(Boolean).length,
+        },
+      });
+    } catch (error: any) {
+      console.error('Error transcribing audio:', error);
+      return res.status(500).json({
+        error: 'TRANSCRIPTION_FAILED',
+        message:
+          error?.message ||
+          'Failed to transcribe this recording. Please check the file and try again.',
+      });
+    }
+  },
+);
+
 app.get('/api/health', (_req: Request, res: Response) => {
   res.json({
     status: 'ok',
     app: 'EchoCRM',
     model: MODEL_NAME,
     hasApiKey: !!process.env.GEMINI_API_KEY,
+    features: ['debrief', 'email_tone', 'audio_transcription'],
   });
 });
 
 async function startServer() {
   const isDev = process.env.NODE_ENV !== 'production';
+  const httpServer = createServer(app);
 
   if (isDev) {
     const { createServer: createViteServer } = await import('vite');
     const vite = await createViteServer({
-      server: { middlewareMode: true },
+      server: {
+        middlewareMode: true,
+        ws: process.env.DISABLE_HMR === 'true' ? false : { server: httpServer },
+      },
       appType: 'spa',
     });
     app.use(vite.middlewares);
@@ -427,7 +590,7 @@ async function startServer() {
     });
   }
 
-  app.listen(PORT, '0.0.0.0', () => {
+  httpServer.listen(PORT, '0.0.0.0', () => {
     console.log(`EchoCRM server running on http://0.0.0.0:${PORT} [${isDev ? 'development' : 'production'}]`);
   });
 }

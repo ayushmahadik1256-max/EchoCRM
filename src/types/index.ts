@@ -12,6 +12,8 @@ export type TaskPriority = 'Low' | 'Medium' | 'High';
 
 export type DebriefStatus = 'Open' | 'Done';
 
+export type AudioUploadStatus = 'idle' | 'uploading' | 'transcribing' | 'done' | 'error';
+
 export interface CRMRecord {
   clientName: string;
   company: string;
@@ -107,5 +109,36 @@ export interface UserProfile {
   defaultTaskPriority?: TaskPriority;
   updatedAt?: string;
 }
+
+/** Represents a call template — either a built-in system template or a user-created custom one */
+export interface CallTemplate {
+  id: string;
+  /** Firebase UID for user-created templates, 'system' for built-ins */
+  userId: string;
+  name: string;
+  description: string;
+  dealStage: DealStage;
+  preferredTone: EmailTone;
+  suggestedPrompts: string[];
+  placeholderHint: string;
+  /** true for user-created templates stored in Firestore / localStorage */
+  isCustom?: boolean;
+  createdAt?: string;
+  updatedAt?: string;
+}
+/** A user-created call template (built-ins live in src/data/templates.ts). */
+export interface StoredTemplate {
+  id: string;
+  userId: string;
+  name: string;
+  description: string;
+  prompts: string[];
+  defaultDealStage: DealStage;
+  preferredTone: EmailTone;
+  isCustom: boolean;
+  createdAt: string;
+  updatedAt: string;
+}
+
 
 

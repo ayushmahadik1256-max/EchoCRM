@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import {
   Mail,
   Layers,
@@ -30,10 +30,14 @@ import {
   DebriefDocument,
 } from '../types';
 import { EditableChipList } from '../components/EditableChipList';
-import { downloadTaskIcs } from '../services/ics';
+import { downloadTaskIcs, buildGoogleCalendarUrl, buildOutlookCalendarUrl } from '../services/ics';
 import { regenerateEmailTone } from '../services/geminiClient';
 import { useAuth } from '../hooks/useAuth';
 import { GlassCard } from '../components/GlassCard';
+import { ConfidenceRing } from '../components/visuals/ConfidenceRing';
+import { ArtifactTimeline } from '../components/visuals/ArtifactTimeline';
+import { AuroraBackdrop } from '../components/visuals/AuroraBackdrop';
+import { SpotlightCard } from '../components/visuals/SpotlightCard';
 
 interface ResultsScreenProps {
   initialResult: DebriefResult;
@@ -282,6 +286,59 @@ export const ResultsScreen: React.FC<ResultsScreenProps> = ({
     }
   };
 
+  // Extraction provenance — how much of the transcript was actually captured
+  const provenance = useMemo(() => {
+    const isBlank = (v: string) =>
+      !v || v.trim().length === 0 || v.toLowerCase() === 'needs confirmation';
+
+    const stringFields = [clientName, company, dealStage, agreedNextStep];
+    const listFields = [
+      keyNeeds,
+      objections,
+      budgetSignals,
+      timelineSignals,
+      decisionMakers,
+      risks,
+    ];
+
+    const filled =
+      stringFields.filter((v) => !isBlank(v)).length +
+      listFields.filter((list) => list.some((item) => item && item.trim())).length;
+
+    const totalFields = stringFields.length + listFields.length;
+    const completeness = totalFields > 0 ? filled / totalFields : 0;
+
+    const signalsFound =
+      budgetSignals.length +
+      timelineSignals.length +
+      decisionMakers.length +
+      objections.length +
+      risks.length;
+
+    return {
+      completeness,
+      filled,
+      totalFields,
+      signalsFound,
+      bulletCount: internalNotes.length,
+      hasNextStep: !isBlank(taskTitle) && !isBlank(taskDueDate),
+    };
+  }, [
+    clientName,
+    company,
+    dealStage,
+    agreedNextStep,
+    keyNeeds,
+    objections,
+    budgetSignals,
+    timelineSignals,
+    decisionMakers,
+    risks,
+    internalNotes,
+    taskTitle,
+    taskDueDate,
+  ]);
+
   const isClientNeedsConfirm = clientName.toLowerCase().includes('needs confirmation');
   const isCompanyNeedsConfirm = company.toLowerCase().includes('needs confirmation');
   const isNextStepNeedsConfirm = agreedNextStep.toLowerCase().includes('needs confirmation');
@@ -371,6 +428,67 @@ export const ResultsScreen: React.FC<ResultsScreenProps> = ({
           AI-generated — review all dates, names, and commitments before sending to client.
         </span>
       </div>
+
+      {/* Extraction Provenance Panel */}
+      <SpotlightCard className="mb-6 rounded-3xl">
+        <GlassCard className="p-5 sm:p-6 bg-white/88 border border-white/95 shadow-[0_12px_36px_rgba(26,115,217,0.08)] relative overflow-hidden">
+          <AuroraBackdrop intensity={0.45} showGrid={false} />
+
+          <div className="relative grid grid-cols-1 lg:grid-cols-12 gap-6 items-center">
+            {/* Completeness ring */}
+            <div className="lg:col-span-3 flex items-center gap-4">
+              <ConfidenceRing
+                value={provenance.completeness}
+                size={92}
+                strokeWidth={8}
+                caption="captured"
+              />
+              <div className="min-w-0">
+                <span className="text-[11px] font-bold uppercase tracking-wider text-[#5B6B7F] block">
+                  Signal coverage
+                </span>
+                <span className="text-sm font-bold text-[#0F172A] block mt-0.5 leading-snug">
+                  {provenance.filled} of {provenance.totalFields} CRM fields grounded
+                </span>
+                <span className="text-[11px] text-[#5B6B7F] block mt-1 leading-snug">
+                  Unfilled fields are marked “Needs confirmation” — never invented.
+                </span>
+              </div>
+            </div>
+
+            {/* Artifact timeline */}
+            <div className="lg:col-span-5">
+              <span className="text-[11px] font-bold uppercase tracking-wider text-[#5B6B7F] block mb-3">
+                Artifact pipeline
+              </span>
+              <ArtifactTimeline activeIndex={3} />
+            </div>
+
+            {/* Mini stats */}
+            <div className="lg:col-span-4 grid grid-cols-3 gap-2.5">
+              {[
+                { label: 'Signals', value: provenance.signalsFound, tone: 'text-[#1A73D9]' },
+                { label: 'Handoff bullets', value: provenance.bulletCount, tone: 'text-[#0F172A]' },
+                {
+                  label: 'Task dated',
+                  value: provenance.hasNextStep ? 'Yes' : 'No',
+                  tone: provenance.hasNextStep ? 'text-emerald-600' : 'text-amber-600',
+                },
+              ].map((stat) => (
+                <div
+                  key={stat.label}
+                  className="p-3 rounded-2xl bg-[#F3F9FF]/70 border border-[#CFE6FF]/70 text-center"
+                >
+                  <div className={`text-lg font-extrabold font-mono tabular-nums ${stat.tone}`}>
+                    {stat.value}
+                  </div>
+                  <div className="text-[10px] text-[#5B6B7F] mt-0.5 leading-tight">{stat.label}</div>
+                </div>
+              ))}
+            </div>
+          </div>
+        </GlassCard>
+      </SpotlightCard>
 
       {/* Segmented Glass ARIA Tabs with Sliding Active Pill */}
       <div
@@ -810,18 +928,50 @@ export const ResultsScreen: React.FC<ResultsScreenProps> = ({
                 Calendar Task & Follow-up Commitment
               </h3>
               <p className="text-xs text-[#5B6B7F] mt-0.5">
-                Export standard RFC 5545 .ics file for Google Calendar, Apple Calendar, or Outlook.
+                Add directly to your calendar — no OAuth required. Or download a universal .ics file.
               </p>
             </div>
 
-            <button
-              type="button"
-              onClick={handleDownloadCalendar}
-              className="inline-flex items-center gap-2 px-4 py-2.5 text-xs font-bold text-white bg-[#1A73D9] hover:bg-[#155FB5] rounded-xl shadow-[0_2px_10px_rgba(26,115,217,0.3)] transition-all cursor-pointer self-start sm:self-auto"
-            >
-              <Download className="w-4 h-4" />
-              <span>Add to Calendar (.ics)</span>
-            </button>
+            {/* 3-button Calendar Export Group */}
+            <div className="flex flex-wrap gap-2 self-start sm:self-auto">
+              <a
+                href={buildGoogleCalendarUrl(
+                  { title: taskTitle, owner: taskOwner, dueDate: taskDueDate, priority: taskPriority, rationale: taskRationale },
+                  clientName,
+                  company,
+                )}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="inline-flex items-center gap-2 px-3.5 py-2 text-xs font-bold text-white bg-[#1A73D9] hover:bg-[#155FB5] rounded-xl shadow-[0_2px_8px_rgba(26,115,217,0.3)] transition-all cursor-pointer"
+                title="Opens Google Calendar in a new tab — no sign-in required"
+              >
+                <Calendar className="w-3.5 h-3.5" />
+                <span>Google Cal</span>
+              </a>
+              <a
+                href={buildOutlookCalendarUrl(
+                  { title: taskTitle, owner: taskOwner, dueDate: taskDueDate, priority: taskPriority, rationale: taskRationale },
+                  clientName,
+                  company,
+                )}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="inline-flex items-center gap-2 px-3.5 py-2 text-xs font-bold text-[#0F172A] bg-white border border-[#CFE6FF] hover:bg-[#F3F9FF] rounded-xl shadow-2xs transition-all cursor-pointer"
+                title="Opens Outlook Web in a new tab"
+              >
+                <CalendarCheck className="w-3.5 h-3.5 text-[#1A73D9]" />
+                <span>Outlook</span>
+              </a>
+              <button
+                type="button"
+                onClick={handleDownloadCalendar}
+                className="inline-flex items-center gap-2 px-3.5 py-2 text-xs font-bold text-[#0F172A] bg-white border border-[#CFE6FF] hover:bg-[#F3F9FF] rounded-xl shadow-2xs transition-all cursor-pointer"
+                title="Download .ics file — works with Apple Calendar, Outlook Desktop, and any standard calendar app"
+              >
+                <Download className="w-3.5 h-3.5 text-[#1A73D9]" />
+                <span>Download .ics</span>
+              </button>
+            </div>
           </div>
 
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">

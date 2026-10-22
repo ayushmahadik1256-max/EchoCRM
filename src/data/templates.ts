@@ -1,18 +1,13 @@
-import { DealStage, EmailTone } from '../types';
+import { CallTemplate } from '../types';
 
-export interface CallTemplate {
-  id: string;
-  name: string;
-  description: string;
-  dealStage: DealStage;
-  preferredTone: EmailTone;
-  suggestedPrompts: string[];
-  placeholderHint: string;
-}
+// Re-export CallTemplate so existing imports from this file still work
+export type { CallTemplate };
 
+/** Built-in system call templates — read-only, not stored in Firestore */
 export const CALL_TEMPLATES: CallTemplate[] = [
   {
     id: 'discovery',
+    userId: 'system',
     name: 'Discovery Call',
     description: 'Initial qualification, client pain points, current stack, and budget signals',
     dealStage: 'Discovery',
@@ -25,9 +20,11 @@ export const CALL_TEMPLATES: CallTemplate[] = [
     ],
     placeholderHint:
       'e.g. Just spoke with Alex at Acme Corp. They are struggling with manual lead triage... budget looks around $30k... next step is sending technical architecture deck by Friday.',
+    isCustom: false,
   },
   {
     id: 'proposal-followup',
+    userId: 'system',
     name: 'Proposal Follow-Up',
     description: 'Scope review, commercial objections, timeline feasibility, and decision hurdles',
     dealStage: 'Proposal',
@@ -40,9 +37,11 @@ export const CALL_TEMPLATES: CallTemplate[] = [
     ],
     placeholderHint:
       'e.g. Followed up on our Q3 proposal with Elena. Overall positive on the tier-2 scope, but procurement wants a 10% payment milestone split... promised to adjust and resend by tomorrow afternoon.',
+    isCustom: false,
   },
   {
     id: 'status-checkin',
+    userId: 'system',
     name: 'Project Status Check-In',
     description: 'Milestone progress, active blockers, scope adjustments, and deliverable commitments',
     dealStage: 'Closed Won',
@@ -54,5 +53,6 @@ export const CALL_TEMPLATES: CallTemplate[] = [
     ],
     placeholderHint:
       'e.g. Weekly sync with Jordan. Phase 1 mockups approved without revisions. Waiting on their API key to proceed with staging ingestion... Jordan will send keys by 4 PM today.',
+    isCustom: false,
   },
 ];

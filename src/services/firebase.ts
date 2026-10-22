@@ -21,7 +21,7 @@ import {
   getDocFromServer,
 } from 'firebase/firestore';
 import firebaseConfig from '../../firebase-applet-config.json';
-import { DebriefDocument, UserProfile } from '../types';
+import { DebriefDocument, UserProfile, CallTemplate } from '../types';
 
 
 export enum OperationType {
@@ -183,6 +183,49 @@ export async function saveUserProfileToFirestore(profile: UserProfile): Promise<
     });
   } catch (err) {
     handleFirestoreError(err, OperationType.WRITE, path);
+  }
+}
+
+// ─── User Custom Templates ────────────────────────────────────────────────────
+
+export async function fetchUserTemplates(userId: string): Promise<CallTemplate[]> {
+  const path = 'templates';
+  try {
+    const q = query(collection(db, path), where('userId', '==', userId));
+    const snapshot = await getDocs(q);
+    const results: CallTemplate[] = [];
+    snapshot.forEach((docSnap) => {
+      results.push(docSnap.data() as CallTemplate);
+    });
+    return results.sort(
+      (a, b) => new Date(b.createdAt || 0).getTime() - new Date(a.createdAt || 0).getTime(),
+    );
+  } catch (err) {
+    handleFirestoreError(err, OperationType.LIST, path);
+    return [];
+  }
+}
+
+export async function saveTemplateToFirestore(template: CallTemplate): Promise<void> {
+  const path = `templates/${template.id}`;
+  try {
+    const docRef = doc(db, 'templates', template.id);
+    await setDoc(docRef, {
+      ...template,
+      updatedAt: new Date().toISOString(),
+    });
+  } catch (err) {
+    handleFirestoreError(err, OperationType.WRITE, path);
+  }
+}
+
+export async function deleteTemplateFromFirestore(templateId: string): Promise<void> {
+  const path = `templates/${templateId}`;
+  try {
+    const docRef = doc(db, 'templates', templateId);
+    await deleteDoc(docRef);
+  } catch (err) {
+    handleFirestoreError(err, OperationType.DELETE, path);
   }
 }
 

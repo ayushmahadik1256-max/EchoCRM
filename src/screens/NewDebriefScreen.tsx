@@ -17,10 +17,11 @@ import {
   X,
   Activity,
   ArrowRight,
+  Settings2,
 } from 'lucide-react';
-import { DealStage, DebriefResult } from '../types';
+import { DealStage, DebriefResult, CallTemplate } from '../types';
 import { SAMPLE_DICTATED_NOTE, SAMPLE_METADATA } from '../data/sampleNotes';
-import { CALL_TEMPLATES, CallTemplate } from '../data/templates';
+import { CALL_TEMPLATES } from '../data/templates';
 import { useSpeechRecognition } from '../hooks/useSpeechRecognition';
 import { MicButton } from '../components/MicButton';
 import { GlassCard } from '../components/GlassCard';
@@ -28,6 +29,12 @@ import { FloatingPanel } from '../components/FloatingPanel';
 import { generateDebriefFromApi } from '../services/geminiClient';
 import { DebriefSkeletonLoader } from '../components/DebriefSkeletonLoader';
 import { useAuth } from '../hooks/useAuth';
+import { WaveformBars } from '../components/visuals/WaveformBars';
+import { ArtifactTimeline } from '../components/visuals/ArtifactTimeline';
+import { AudioUploadPanel } from '../components/AudioUploadPanel';
+import { TemplateManagerModal } from '../components/TemplateManagerModal';
+import { fetchUserTemplates } from '../services/firebase';
+import { getGuestTemplates } from '../services/localStore';
 
 interface NewDebriefScreenProps {
   initialTranscript?: string;
@@ -59,7 +66,7 @@ export const NewDebriefScreen: React.FC<NewDebriefScreenProps> = ({
   initialMetadata = {},
   onGenerateSuccess,
 }) => {
-  const { userProfile, emailSignature } = useAuth();
+  const { userProfile, emailSignature, user, isGuest } = useAuth();
 
   const [transcript, setTranscript] = useState(initialTranscript);
   const [clientName, setClientName] = useState(initialMetadata.clientName || '');
@@ -74,6 +81,16 @@ export const NewDebriefScreen: React.FC<NewDebriefScreenProps> = ({
   // Template state
   const [selectedTemplateId, setSelectedTemplateId] = useState<string>('custom');
   const [showTemplatePrompts, setShowTemplatePrompts] = useState(true);
+
+  // User-created custom templates (merged with system templates)
+  const [userTemplates, setUserTemplates] = useState<CallTemplate[]>([]);
+  const allTemplates: CallTemplate[] = [...CALL_TEMPLATES, ...userTemplates];
+
+  // Template Manager Modal
+  const [showTemplateManager, setShowTemplateManager] = useState(false);
+
+  // Audio upload panel
+  const [showAudioUpload, setShowAudioUpload] = useState(false);
 
   // Dismissible first-run sample tip card
   const [showTipCard, setShowTipCard] = useState(true);
@@ -102,6 +119,23 @@ export const NewDebriefScreen: React.FC<NewDebriefScreenProps> = ({
     onTranscriptUpdate: handleTranscriptChunk,
   });
 
+  // Load user-created custom templates on mount / auth change
+  useEffect(() => {
+    let cancelled = false;
+    async function load() {
+      try {
+        const tpls = user
+          ? await fetchUserTemplates(user.uid)
+          : getGuestTemplates();
+        if (!cancelled) setUserTemplates(tpls);
+      } catch {
+        // silent — system templates still work
+      }
+    }
+    load();
+    return () => { cancelled = true; };
+  }, [user]);
+
   // Calculate stats
   const wordCount = transcript.trim() ? transcript.trim().split(/\s+/).length : 0;
   const charCount = transcript.length;
@@ -119,7 +153,7 @@ export const NewDebriefScreen: React.FC<NewDebriefScreenProps> = ({
     setSelectedTemplateId(templateId);
     if (templateId === 'custom') return;
 
-    const tpl = CALL_TEMPLATES.find((t) => t.id === templateId);
+    const tpl = allTemplates.find((t) => t.id === templateId);
     if (tpl) {
       setDealStage(tpl.dealStage);
     }
@@ -162,7 +196,7 @@ export const NewDebriefScreen: React.FC<NewDebriefScreenProps> = ({
     setApiError(null);
     setIsGenerating(true);
 
-    const activeTemplate = CALL_TEMPLATES.find((t) => t.id === selectedTemplateId);
+    const activeTemplate = allTemplates.find((t) => t.id === selectedTemplateId);
     const preferredTone =
       activeTemplate?.preferredTone || userProfile.defaultTone || 'Professional';
 
@@ -202,7 +236,7 @@ export const NewDebriefScreen: React.FC<NewDebriefScreenProps> = ({
     return <DebriefSkeletonLoader />;
   }
 
-  const activeTemplate = CALL_TEMPLATES.find((t) => t.id === selectedTemplateId);
+  const activeTemplate = allTemplates.find((t) => t.id === selectedTemplateId);
 
   return (
     <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 pb-24 md:pb-12">
@@ -324,23 +358,31 @@ export const NewDebriefScreen: React.FC<NewDebriefScreenProps> = ({
                 onStop={stopListening}
               />
 
-              {/* Live Simulated Soundwave Frequency Bars when Recording */}
-              {isRecording && (
-                <div
-                  aria-hidden="true"
-                  className="flex items-center gap-1.5 mt-4 px-4 py-2 bg-rose-50 border border-rose-200/80 rounded-full"
-                >
-                  <Activity className="w-3.5 h-3.5 text-rose-600 animate-pulse" />
-                  <div className="flex items-center gap-1 h-4">
-                    <div className="w-1 h-3 bg-rose-500 rounded-full animate-bounce [animation-delay:0.1s]" />
-                    <div className="w-1 h-4 bg-rose-600 rounded-full animate-bounce [animation-delay:0.25s]" />
-                    <div className="w-1 h-2 bg-rose-400 rounded-full animate-bounce [animation-delay:0.15s]" />
-                    <div className="w-1 h-5 bg-rose-600 rounded-full animate-bounce [animation-delay:0.35s]" />
-                    <div className="w-1 h-3 bg-rose-500 rounded-full animate-bounce [animation-delay:0.2s]" />
-                  </div>
-                  <span className="text-[11px] font-bold text-rose-700 ml-1">Live Audio Stream</span>
+              {/* Live Soundwave Visualizer when Recording */}
+              <div
+                aria-hidden="true"
+                className={`flex items-center gap-3 mt-4 px-4 py-2.5 border rounded-2xl transition-colors ${
+                  isRecording
+                    ? 'bg-rose-50 border-rose-200/80 shadow-[0_6px_20px_rgba(244,63,94,0.12)]'
+                    : 'bg-[#F3F9FF] border-[#CFE6FF]'
+                }`}
+              >
+                <Activity
+                  className={`w-3.5 h-3.5 shrink-0 ${
+                    isRecording ? 'text-rose-600 animate-pulse' : 'text-[#1A73D9]'
+                  }`}
+                />
+                <div className="h-6 flex-1 min-w-0">
+                  <WaveformBars active={isRecording} tone={isRecording ? 'rose' : 'blue'} />
                 </div>
-              )}
+                <span
+                  className={`text-[11px] font-bold shrink-0 ${
+                    isRecording ? 'text-rose-700' : 'text-[#5B6B7F]'
+                  }`}
+                >
+                  {isRecording ? 'Live Audio Stream' : 'Waveform Idle'}
+                </span>
+              </div>
             </div>
 
             {/* Live Interim Speech Feedback */}
@@ -401,6 +443,20 @@ export const NewDebriefScreen: React.FC<NewDebriefScreenProps> = ({
               </p>
             </div>
           </FloatingPanel>
+
+          {/* Audio Upload — collapsible alternative to mic dictation */}
+          <AudioUploadPanel
+            isOpen={showAudioUpload}
+            onToggle={() => setShowAudioUpload((v) => !v)}
+            onTranscriptReady={(text) => {
+              if (isRecording) stopListening();
+              setTranscript((prev) => {
+                const separator = prev.trim() ? '\n\n[Transcribed from audio]\n' : '';
+                return prev + separator + text;
+              });
+              setShowAudioUpload(false);
+            }}
+          />
         </div>
 
         {/* RIGHT COLUMN: Call Templates & Client Context Metadata (lg:col-span-5) */}
@@ -412,16 +468,27 @@ export const NewDebriefScreen: React.FC<NewDebriefScreenProps> = ({
                 <BookmarkCheck className="w-3.5 h-3.5 text-[#1A73D9]" />
                 <span>Call Template</span>
               </span>
-              {activeTemplate && (
+              <div className="flex items-center gap-2">
+                {activeTemplate && (
+                  <button
+                    type="button"
+                    onClick={() => setShowTemplatePrompts(!showTemplatePrompts)}
+                    className="text-[11px] font-semibold text-[#1A73D9] hover:text-[#155FB5] flex items-center gap-1 cursor-pointer"
+                  >
+                    <span>{showTemplatePrompts ? 'Hide hints' : 'Show hints'}</span>
+                    {showTemplatePrompts ? <ChevronUp className="w-3 h-3" /> : <ChevronDown className="w-3 h-3" />}
+                  </button>
+                )}
                 <button
                   type="button"
-                  onClick={() => setShowTemplatePrompts(!showTemplatePrompts)}
-                  className="text-[11px] font-semibold text-[#1A73D9] hover:text-[#155FB5] flex items-center gap-1 cursor-pointer"
+                  onClick={() => setShowTemplateManager(true)}
+                  className="inline-flex items-center gap-1 text-[11px] font-semibold text-[#5B6B7F] hover:text-[#1A73D9] transition-colors cursor-pointer"
+                  title="Manage custom templates"
                 >
-                  <span>{showTemplatePrompts ? 'Hide hints' : 'Show hints'}</span>
-                  {showTemplatePrompts ? <ChevronUp className="w-3 h-3" /> : <ChevronDown className="w-3 h-3" />}
+                  <Settings2 className="w-3 h-3" />
+                  <span>Manage</span>
                 </button>
-              )}
+              </div>
             </div>
 
             <div className="grid grid-cols-2 gap-2">
@@ -437,18 +504,28 @@ export const NewDebriefScreen: React.FC<NewDebriefScreenProps> = ({
                 Custom / Blank
               </button>
 
-              {CALL_TEMPLATES.map((tpl) => (
+              {allTemplates.map((tpl) => (
                 <button
                   key={tpl.id}
                   type="button"
                   onClick={() => handleSelectTemplate(tpl.id)}
-                  className={`py-2 px-3 text-xs rounded-xl font-semibold transition-all cursor-pointer border ${
+                  className={`py-2 px-3 text-xs rounded-xl font-semibold transition-all cursor-pointer border text-left ${
                     selectedTemplateId === tpl.id
                       ? 'bg-[#1A73D9] text-white border-[#1A73D9] shadow-2xs'
                       : 'bg-white text-[#0F172A] border-[#CFE6FF] hover:bg-[#F3F9FF]'
                   }`}
                 >
-                  {tpl.name}
+                  <span className="flex items-center gap-1 truncate">
+                    {tpl.isCustom && (
+                      <span
+                        className={`shrink-0 ${selectedTemplateId === tpl.id ? 'text-blue-200' : 'text-[#1A73D9]'}`}
+                        title="Custom template"
+                      >
+                        ✦
+                      </span>
+                    )}
+                    <span className="truncate">{tpl.name}</span>
+                  </span>
                 </button>
               ))}
             </div>
@@ -557,6 +634,32 @@ export const NewDebriefScreen: React.FC<NewDebriefScreenProps> = ({
             </div>
           </GlassCard>
 
+          {/* Output Preview — what Gemini will build from these notes */}
+          <GlassCard className="p-5 sm:p-6 bg-white/85 border border-white/95 shadow-[0_8px_24px_rgba(26,115,217,0.06)] space-y-4 relative overflow-hidden">
+            <div
+              aria-hidden="true"
+              className="absolute -top-12 -right-10 w-40 h-40 rounded-full bg-[#CFE6FF]/40 blur-3xl pointer-events-none"
+            />
+            <div className="relative flex items-center justify-between">
+              <span className="text-xs font-bold uppercase tracking-wider text-[#0F172A] flex items-center gap-1.5">
+                <Sparkles className="w-3.5 h-3.5 text-[#1A73D9]" />
+                <span>Output Preview</span>
+              </span>
+              <span className="text-[10px] font-mono text-[#5B6B7F]">
+                {canGenerate ? '4 artifacts' : 'awaiting notes'}
+              </span>
+            </div>
+
+            <div className="relative">
+              <ArtifactTimeline activeIndex={canGenerate ? 0 : -1} />
+            </div>
+
+            <p className="relative text-[11px] text-[#5B6B7F] leading-relaxed pt-1 border-t border-[#E4F1FF]">
+              Each artifact is generated from the same grounded transcript, so your email, CRM
+              fields and calendar task never disagree with each other.
+            </p>
+          </GlassCard>
+
           {/* Desktop Primary Action Card */}
           <div className="hidden md:block p-4 rounded-2xl bg-gradient-to-r from-[#F3F9FF] to-white border border-[#CFE6FF] shadow-2xs space-y-3">
             <div className="text-xs text-[#5B6B7F]">
@@ -636,6 +739,13 @@ export const NewDebriefScreen: React.FC<NewDebriefScreenProps> = ({
           </button>
         </div>
       </div>
+
+      {/* Template Manager Modal */}
+      <TemplateManagerModal
+        isOpen={showTemplateManager}
+        onClose={() => setShowTemplateManager(false)}
+        onTemplatesChanged={(tpls) => setUserTemplates(tpls)}
+      />
     </div>
   );
 };

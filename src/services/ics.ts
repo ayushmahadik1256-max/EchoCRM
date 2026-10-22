@@ -1,5 +1,79 @@
 import { NextStepTask } from '../types';
 
+/**
+ * Builds a "Add to Google Calendar" URL for a task.
+ * No OAuth required — opens google.com/calendar/render in a new tab.
+ */
+export function buildGoogleCalendarUrl(
+  task: NextStepTask,
+  clientName?: string,
+  company?: string,
+): string {
+  const title = `[EchoCRM] ${task.title}${company ? ` — ${company}` : ''}`;
+  const body = [
+    `Owner: ${task.owner}`,
+    `Priority: ${task.priority}`,
+    `Client: ${clientName || 'N/A'}`,
+    `Company: ${company || 'N/A'}`,
+    '',
+    'Rationale:',
+    task.rationale,
+    '',
+    'Created by EchoCRM Assistant.',
+  ].join('\n');
+
+  // Google Calendar requires dates as YYYYMMDD for all-day events
+  const dtStart = formatDateToIcs(task.dueDate);
+  const dtEnd = getNextDayIcs(task.dueDate);
+
+  const params = new URLSearchParams({
+    action: 'TEMPLATE',
+    text: title,
+    dates: `${dtStart}/${dtEnd}`,
+    details: body,
+  });
+
+  return `https://calendar.google.com/calendar/render?${params.toString()}`;
+}
+
+/**
+ * Builds an "Add to Outlook Web" URL for a task.
+ * Opens outlook.office.com in a new tab — no OAuth required.
+ */
+export function buildOutlookCalendarUrl(
+  task: NextStepTask,
+  clientName?: string,
+  company?: string,
+): string {
+  const subject = `[EchoCRM] ${task.title}${company ? ` — ${company}` : ''}`;
+  const body = [
+    `Owner: ${task.owner}`,
+    `Priority: ${task.priority}`,
+    `Client: ${clientName || 'N/A'}`,
+    `Company: ${company || 'N/A'}`,
+    '',
+    'Rationale:',
+    task.rationale,
+    '',
+    'Created by EchoCRM Assistant.',
+  ].join('\n');
+
+  // Outlook Web expects ISO 8601 format: YYYY-MM-DDTHH:mm:ss
+  const startdt = `${task.dueDate}T09:00:00`;
+  const enddt = `${task.dueDate}T10:00:00`;
+
+  const params = new URLSearchParams({
+    rru: 'addevent',
+    startdt,
+    enddt,
+    subject,
+    body,
+    allday: 'false',
+  });
+
+  return `https://outlook.office.com/calendar/action/compose?${params.toString()}`;
+}
+
 function escapeIcsText(text: string): string {
   return text
     .replace(/\\/g, '\\\\')

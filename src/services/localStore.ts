@@ -142,4 +142,49 @@ export function saveGuestUserProfile(profile: UserProfile): void {
   }
 }
 
+// ─── Guest Custom Templates ───────────────────────────────────────────────────
+
+import { CallTemplate } from '../types';
+
+const TEMPLATES_KEY = 'echocrm_guest_templates_v1';
+
+export function getGuestTemplates(): CallTemplate[] {
+  try {
+    const raw = localStorage.getItem(TEMPLATES_KEY);
+    if (!raw) return [];
+    const parsed = JSON.parse(raw) as CallTemplate[];
+    return Array.isArray(parsed) ? parsed : [];
+  } catch (err) {
+    console.error('Error loading guest templates from localStorage:', err);
+    return [];
+  }
+}
+
+export function saveGuestTemplate(template: CallTemplate): void {
+  try {
+    const existing = getGuestTemplates();
+    const index = existing.findIndex((t) => t.id === template.id);
+    let updated: CallTemplate[];
+    if (index >= 0) {
+      updated = [...existing];
+      updated[index] = { ...template, updatedAt: new Date().toISOString() };
+    } else {
+      updated = [template, ...existing];
+    }
+    localStorage.setItem(TEMPLATES_KEY, JSON.stringify(updated));
+  } catch (err) {
+    console.error('Error saving guest template to localStorage:', err);
+  }
+}
+
+export function deleteGuestTemplate(id: string): void {
+  try {
+    const existing = getGuestTemplates();
+    const filtered = existing.filter((t) => t.id !== id);
+    localStorage.setItem(TEMPLATES_KEY, JSON.stringify(filtered));
+  } catch (err) {
+    console.error('Error deleting guest template from localStorage:', err);
+  }
+}
+
 

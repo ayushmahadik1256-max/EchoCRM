@@ -10,6 +10,9 @@ import {
   CalendarCheck,
   Check,
   Zap,
+  AudioWaveform,
+  ShieldCheck,
+  Layers3,
 } from 'lucide-react';
 import { motion } from 'motion/react';
 import { useAuth } from '../hooks/useAuth';
@@ -17,6 +20,11 @@ import { TiltCard } from '../components/TiltCard';
 import { GlassCard } from '../components/GlassCard';
 import { VoiceTransformationVisual } from '../components/VoiceTransformationVisual';
 import { VoiceHeroScene } from '../components/three/VoiceHeroScene';
+import { ArtifactConstellation } from '../components/three/ArtifactConstellation';
+import { AuroraBackdrop } from '../components/visuals/AuroraBackdrop';
+import { ArtifactTimeline } from '../components/visuals/ArtifactTimeline';
+import { ConfidenceRing } from '../components/visuals/ConfidenceRing';
+import { SpotlightCard } from '../components/visuals/SpotlightCard';
 
 interface LandingScreenProps {
   onStartNew: () => void;
@@ -52,7 +60,7 @@ export const LandingScreen: React.FC<LandingScreenProps> = ({
 
             <h1 className="text-3xl sm:text-5xl md:text-6xl font-extrabold tracking-tight text-[#0F172A] leading-[1.12]">
               Turn a 2-minute call debrief into a{' '}
-              <span className="text-[#1A73D9] underline decoration-[#AFD3FA] decoration-wavy decoration-2 underline-offset-4">
+              <span className="text-gradient-blue underline decoration-[#AFD3FA] decoration-wavy decoration-2 underline-offset-4">
                 perfect follow-up.
               </span>
             </h1>
@@ -273,27 +281,167 @@ export const LandingScreen: React.FC<LandingScreenProps> = ({
         </div>
       </section>
 
-      {/* 3-Step Explainer Section Connected by Light-Blue Line */}
-      <section className="relative py-16 md:py-24 border-t border-[#E4F1FF] bg-gradient-to-b from-[#F3F9FF]/60 to-white">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="text-center max-w-xl mx-auto mb-14">
-            <h2 className="text-2xl sm:text-3xl font-extrabold tracking-tight text-[#0F172A]">
-              How EchoCRM works in 3 rapid steps
+      {/* Artifact Constellation Band — One note in, four artifacts out */}
+      <section className="relative overflow-hidden border-t border-[#E4F1FF] bg-white">
+        <AuroraBackdrop intensity={0.75} />
+
+        <div className="relative max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-16 md:py-24">
+          <motion.div
+            className="max-w-2xl mx-auto text-center mb-12"
+            initial={{ opacity: 0, y: 26 }}
+            whileInView={{ opacity: 1, y: 0 }}
+            viewport={{ once: true, amount: 0.4 }}
+            transition={{ duration: 0.6, ease: [0.16, 1, 0.3, 1] }}
+          >
+            <span className="inline-flex items-center gap-2 px-3.5 py-1.5 text-[11px] font-bold uppercase tracking-wider text-[#1A73D9] bg-[#F3F9FF] px-3 py-1 rounded-full border border-[#CFE6FF]">
+              <AudioWaveform className="w-3.5 h-3.5" />
+              One note in · Four artifacts out
+            </span>
+            <h2 className="mt-4 text-2xl sm:text-3xl font-extrabold tracking-tight text-[#0F172A]">
+              Watch raw speech become{' '}
+              <span className="text-gradient-blue">structured work</span>
             </h2>
             <p className="mt-2 text-sm text-[#5B6B7F]">
-              No manual typing or tedious CRM data entry while fresh call context fades.
+              Gemini streams your dictation through a schema-constrained pipeline. Every
+              artifact stays grounded in what the client actually said.
             </p>
+          </motion.div>
+
+          <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-center">
+            {/* 3D Constellation */}
+            <motion.div
+              className="lg:col-span-7 relative"
+              initial={{ opacity: 0, scale: 0.94 }}
+              whileInView={{ opacity: 1, scale: 1 }}
+              viewport={{ once: true, amount: 0.25 }}
+              transition={{ duration: 0.75, ease: [0.16, 1, 0.3, 1] }}
+            >
+              <div className="relative rounded-[28px] h-[380px] sm:h-[440px] overflow-hidden border border-white/90 bg-gradient-to-b from-white/85 to-[#F3F9FF]/70 backdrop-blur-md shadow-[0_20px_60px_rgba(26,115,217,0.12)]">
+                <ArtifactConstellation />
+
+                {/* Corner readout */}
+                <div className="absolute top-4 left-4 px-3 py-2 rounded-xl bg-white/85 backdrop-blur-md border border-[#CFE6FF] shadow-2xs">
+                  <div className="text-[10px] font-mono text-[#5B6B7F]">gemini-2.5-flash</div>
+                  <div className="flex items-center gap-1.5 mt-0.5">
+                    <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
+                    <span className="text-[10px] font-bold text-[#0F172A]">structured output</span>
+                  </div>
+                </div>
+
+                <div className="absolute bottom-4 right-4 px-3 py-2 rounded-xl bg-white/85 backdrop-blur-md border border-[#CFE6FF] shadow-2xs text-right">
+                  <div className="text-[10px] font-mono text-[#5B6B7F]">schema valid</div>
+                  <div className="text-sm font-extrabold font-mono text-[#1A73D9] tabular-nums">
+                    100%
+                  </div>
+                </div>
+              </div>
+            </motion.div>
+
+            {/* Artifact detail list */}
+            <motion.div
+              className="lg:col-span-5 space-y-4"
+              initial={{ opacity: 0, x: 26 }}
+              whileInView={{ opacity: 1, x: 0 }}
+              viewport={{ once: true, amount: 0.25 }}
+              transition={{ duration: 0.65, ease: [0.16, 1, 0.3, 1] }}
+            >
+              <SpotlightCard className="rounded-3xl">
+                <GlassCard className="p-5 sm:p-6 bg-white/88 border border-white/95 shadow-[0_12px_36px_rgba(26,115,217,0.1)] space-y-4">
+                  <div className="flex items-center gap-3">
+                    <ConfidenceRing value={1} size={64} strokeWidth={6} caption="grounded" />
+                    <div>
+                      <h3 className="text-sm font-bold text-[#0F172A]">
+                        Zero hallucination by construction
+                      </h3>
+                      <p className="text-xs text-[#5B6B7F] mt-0.5 leading-relaxed">
+                        Strict <span className="font-mono text-[#1A73D9]">responseSchema</span>{' '}
+                        enforcement means every field is either extracted from your call or
+                        flagged “Needs confirmation”.
+                      </p>
+                    </div>
+                  </div>
+
+                  <div className="pt-3 border-t border-[#E4F1FF]">
+                    <ArtifactTimeline />
+                  </div>
+
+                  <div className="pt-3 border-t border-[#E4F1FF] grid grid-cols-2 gap-3">
+                    <div className="flex items-start gap-2">
+                      <ShieldCheck className="w-4 h-4 text-[#1A73D9] shrink-0 mt-0.5" />
+                      <span className="text-[11px] text-[#5B6B7F] leading-snug">
+                        Facts, metrics and dates preserved verbatim
+                      </span>
+                    </div>
+                    <div className="flex items-start gap-2">
+                      <Layers3 className="w-4 h-4 text-[#1A73D9] shrink-0 mt-0.5" />
+                      <span className="text-[11px] text-[#5B6B7F] leading-snug">
+                        100% parseable JSON, never broken brackets
+                      </span>
+                    </div>
+                  </div>
+                </GlassCard>
+              </SpotlightCard>
+            </motion.div>
+          </div>
+        </div>
+      </section>
+
+      {/* 3-Step Explainer Section Connected by Light-Blue Line */}
+      <section className="relative py-16 md:py-24 border-t border-[#E4F1FF] bg-gradient-to-b from-[#F3F9FF]/60 to-white">
+        <AuroraBackdrop intensity={0.5} showGrid={false} />
+
+        <div className="relative max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+          <div className="text-center max-w-xl mx-auto mb-14">
+            <motion.h2
+              className="text-2xl sm:text-3xl font-extrabold tracking-tight text-[#0F172A]"
+              initial={{ opacity: 0, y: 20 }}
+              whileInView={{ opacity: 1, y: 0 }}
+              viewport={{ once: true, amount: 0.5 }}
+              transition={{ duration: 0.55, ease: [0.16, 1, 0.3, 1] }}
+            >
+              How EchoCRM works in 3 rapid steps
+            </motion.h2>
+            <motion.p
+              className="mt-2 text-sm text-[#5B6B7F]"
+              initial={{ opacity: 0, y: 20 }}
+              whileInView={{ opacity: 1, y: 0 }}
+              viewport={{ once: true, amount: 0.5 }}
+              transition={{ duration: 0.55, delay: 0.08, ease: [0.16, 1, 0.3, 1] }}
+            >
+              No manual typing or tedious CRM data entry while fresh call context fades.
+            </motion.p>
           </div>
 
           <div className="relative">
-            {/* Connecting thin light-blue line on desktop */}
+            {/* Connecting light-blue rail with a flowing pulse (desktop) */}
             <div
               aria-hidden="true"
-              className="hidden md:block absolute top-1/2 left-[15%] right-[15%] h-0.5 -translate-y-6 bg-gradient-to-r from-[#CFE6FF] via-[#1A73D9]/30 to-[#CFE6FF] z-0"
-            />
+              className="hidden md:block absolute top-1/2 left-[15%] right-[15%] h-0.5 -translate-y-6 z-0"
+            >
+              <svg className="w-full h-full overflow-visible" preserveAspectRatio="none" viewBox="0 0 100 1">
+                <line x1="0" y1="0.5" x2="100" y2="0.5" stroke="#CFE6FF" strokeWidth="1" />
+                <line
+                  className="dash-flow"
+                  x1="0"
+                  y1="0.5"
+                  x2="100"
+                  y2="0.5"
+                  stroke="#1A73D9"
+                  strokeWidth="1.6"
+                  strokeLinecap="round"
+                  opacity="0.55"
+                />
+              </svg>
+            </div>
 
             <div className="grid grid-cols-1 md:grid-cols-3 gap-6 relative z-10">
               {/* Step 1 */}
+              <motion.div
+                initial={{ opacity: 0, y: 28 }}
+                whileInView={{ opacity: 1, y: 0 }}
+                viewport={{ once: true, amount: 0.3 }}
+                transition={{ duration: 0.6, delay: 0.05, ease: [0.16, 1, 0.3, 1] }}
+              >
               <TiltCard maxTilt={5}>
                 <GlassCard className="p-6 bg-white/85 border border-white/95 h-full flex flex-col justify-between shadow-[0_8px_24px_rgba(26,115,217,0.06)] hover:shadow-[0_16px_40px_rgba(26,115,217,0.12)]">
                   <div>
@@ -315,8 +463,15 @@ export const LandingScreen: React.FC<LandingScreenProps> = ({
                   </div>
                 </GlassCard>
               </TiltCard>
+              </motion.div>
 
               {/* Step 2 */}
+              <motion.div
+                initial={{ opacity: 0, y: 28 }}
+                whileInView={{ opacity: 1, y: 0 }}
+                viewport={{ once: true, amount: 0.3 }}
+                transition={{ duration: 0.6, delay: 0.15, ease: [0.16, 1, 0.3, 1] }}
+              >
               <TiltCard maxTilt={5}>
                 <GlassCard className="p-6 bg-white/85 border border-white/95 h-full flex flex-col justify-between shadow-[0_8px_24px_rgba(26,115,217,0.06)] hover:shadow-[0_16px_40px_rgba(26,115,217,0.12)]">
                   <div>
@@ -338,8 +493,15 @@ export const LandingScreen: React.FC<LandingScreenProps> = ({
                   </div>
                 </GlassCard>
               </TiltCard>
+              </motion.div>
 
               {/* Step 3 */}
+              <motion.div
+                initial={{ opacity: 0, y: 28 }}
+                whileInView={{ opacity: 1, y: 0 }}
+                viewport={{ once: true, amount: 0.3 }}
+                transition={{ duration: 0.6, delay: 0.25, ease: [0.16, 1, 0.3, 1] }}
+              >
               <TiltCard maxTilt={5}>
                 <GlassCard className="p-6 bg-white/85 border border-white/95 h-full flex flex-col justify-between shadow-[0_8px_24px_rgba(26,115,217,0.06)] hover:shadow-[0_16px_40px_rgba(26,115,217,0.12)]">
                   <div>
@@ -361,6 +523,7 @@ export const LandingScreen: React.FC<LandingScreenProps> = ({
                   </div>
                 </GlassCard>
               </TiltCard>
+              </motion.div>
             </div>
           </div>
         </div>
