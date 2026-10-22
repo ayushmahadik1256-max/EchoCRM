@@ -1,0 +1,10 @@
+{
+  "name": "EchoCRM — Voice-First Client Follow-Up Assistant",
+  "description": "Turn messy post-call voice notes into clean client follow-ups, CRM records, and calendar next steps with AI.",
+  "requestFramePermissions": [
+    "microphone"
+  ],
+  "majorCapabilities": [
+    "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"
+  ]
+}
