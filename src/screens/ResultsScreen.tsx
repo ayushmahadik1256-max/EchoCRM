@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import {
   Mail,
   Layers,
@@ -21,6 +21,16 @@ import {
   FileSignature,
   Clock,
   HelpCircle,
+  Volume2,
+  VolumeX,
+  Play,
+  Square,
+  ExternalLink,
+  MessageSquare,
+  Share2,
+  Send,
+  Eye,
+  EyeOff,
 } from 'lucide-react';
 import {
   DebriefResult,
@@ -31,6 +41,9 @@ import {
 } from '../types';
 import { EditableChipList } from '../components/EditableChipList';
 import { downloadTaskIcs, buildGoogleCalendarUrl, buildOutlookCalendarUrl } from '../services/ics';
+import { buildGmailWebUrl, buildOutlookWebMailUrl, buildMailtoUrl } from '../services/emailDispatch';
+import { voicePlayer, generateVoiceDebriefScript } from '../services/voiceDebrief';
+import { formatSlackHandoff, formatMarkdownHandoff } from '../services/handoffExport';
 import { regenerateEmailTone } from '../services/geminiClient';
 import { useAuth } from '../hooks/useAuth';
 import { GlassCard } from '../components/GlassCard';
@@ -88,6 +101,30 @@ export const ResultsScreen: React.FC<ResultsScreenProps> = ({
   );
   const [isRegeneratingTone, setIsRegeneratingTone] = useState(false);
   const [copiedEmail, setCopiedEmail] = useState(false);
+
+  // Client recipient email (auto-detected or editable for 1-click dispatch)
+  const [clientEmail, setClientEmail] = useState(() => {
+    const emailMatch = rawTranscript.match(/([a-zA-Z0-9._-]+@[a-zA-Z0-9._-]+\.[a-zA-Z0-9_-]+)/);
+    return emailMatch ? emailMatch[1] : '';
+  });
+
+  // Audio-Out Voice Debrief state
+  const [isVoicePlaying, setIsVoicePlaying] = useState(false);
+
+  // Team Handoff export toasts
+  const [copiedSlack, setCopiedSlack] = useState(false);
+  const [copiedMarkdown, setCopiedMarkdown] = useState(false);
+
+  // Interactive Transcript Grounding state
+  const [showGroundingDrawer, setShowGroundingDrawer] = useState(false);
+  const [highlightKeyword, setHighlightKeyword] = useState<string | null>(null);
+
+  // Stop voice player on unmount
+  useEffect(() => {
+    return () => {
+      voicePlayer.stop();
+    };
+  }, []);
 
   // CRM state
   const [clientName, setClientName] = useState(
@@ -203,6 +240,89 @@ export const ResultsScreen: React.FC<ResultsScreenProps> = ({
     navigator.clipboard.writeText(notesText);
     setCopiedNotes(true);
     setTimeout(() => setCopiedNotes(false), 2200);
+  };
+
+  // Copy Slack Handoff
+  const handleCopySlack = () => {
+    const slackText = formatSlackHandoff({
+      clientName,
+      company,
+      dealStage,
+      callDate: metadata.callDate || new Date().toISOString().split('T')[0],
+      emailSubject,
+      nextStepTitle: taskTitle,
+      nextStepOwner: taskOwner,
+      nextStepDueDate: taskDueDate,
+      nextStepPriority: taskPriority,
+      nextStepRationale: taskRationale,
+      keyNeeds,
+      objections,
+      budgetSignals,
+      timelineSignals,
+      decisionMakers,
+      risks,
+      internalNotes,
+    });
+    navigator.clipboard.writeText(slackText);
+    setCopiedSlack(true);
+    setTimeout(() => setCopiedSlack(false), 2400);
+  };
+
+  // Copy Markdown Handoff (Notion / Jira / Linear / GitHub)
+  const handleCopyMarkdown = () => {
+    const mdText = formatMarkdownHandoff({
+      clientName,
+      company,
+      dealStage,
+      callDate: metadata.callDate || new Date().toISOString().split('T')[0],
+      emailSubject,
+      nextStepTitle: taskTitle,
+      nextStepOwner: taskOwner,
+      nextStepDueDate: taskDueDate,
+      nextStepPriority: taskPriority,
+      nextStepRationale: taskRationale,
+      keyNeeds,
+      objections,
+      budgetSignals,
+      timelineSignals,
+      decisionMakers,
+      risks,
+      internalNotes,
+    });
+    navigator.clipboard.writeText(mdText);
+    setCopiedMarkdown(true);
+    setTimeout(() => setCopiedMarkdown(false), 2400);
+  };
+
+  // Toggle Voice Debrief Playback
+  const handleToggleVoiceDebrief = () => {
+    if (isVoicePlaying) {
+      voicePlayer.stop();
+      setIsVoicePlaying(false);
+      return;
+    }
+
+    const script = generateVoiceDebriefScript({
+      clientName,
+      company,
+      dealStage,
+      agreedNextStep,
+      nextStepTitle: taskTitle,
+      nextStepDueDate: taskDueDate,
+      keyNeeds,
+      budgetSignals,
+      risks,
+    });
+
+    voicePlayer.speak(
+      script,
+      () => setIsVoicePlaying(true),
+      () => setIsVoicePlaying(false),
+      (err) => {
+        console.error('Speech synthesis error:', err);
+        setIsVoicePlaying(false);
+      },
+    );
   };
 
   // Download .ics
@@ -490,6 +610,97 @@ export const ResultsScreen: React.FC<ResultsScreenProps> = ({
         </GlassCard>
       </SpotlightCard>
 
+      {/* Audio-Out AI Voice Debrief & Grounding Inspector Bar */}
+      <div className="mb-6 grid grid-cols-1 md:grid-cols-12 gap-3">
+        {/* Left: 30s Audio Debrief Player */}
+        <div className="md:col-span-8 p-4 rounded-2xl bg-gradient-to-r from-[#F3F9FF] to-white border border-[#CFE6FF] shadow-2xs flex items-center justify-between gap-4">
+          <div className="flex items-center gap-3 min-w-0">
+            <button
+              type="button"
+              onClick={handleToggleVoiceDebrief}
+              className={`w-10 h-10 rounded-xl flex items-center justify-center shrink-0 transition-all cursor-pointer ${
+                isVoicePlaying
+                  ? 'bg-rose-600 text-white shadow-[0_4px_14px_rgba(225,29,72,0.4)] animate-pulse'
+                  : 'bg-[#1A73D9] hover:bg-[#155FB5] text-white shadow-[0_2px_10px_rgba(26,115,217,0.3)]'
+              }`}
+              title={isVoicePlaying ? 'Stop Voice Debrief' : 'Play 30s AI Voice Debrief'}
+              aria-label={isVoicePlaying ? 'Stop Voice Debrief' : 'Play 30s AI Voice Debrief'}
+            >
+              {isVoicePlaying ? <Square className="w-4 h-4 fill-current" /> : <Play className="w-4 h-4 ml-0.5 fill-current" />}
+            </button>
+
+            <div className="min-w-0">
+              <div className="flex items-center gap-2">
+                <span className="text-xs font-bold text-[#0F172A] tracking-tight">
+                  {isVoicePlaying ? 'Speaking Executive Audio Debrief…' : 'Play 30s AI Voice Debrief'}
+                </span>
+                <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-[#E4F1FF] text-[#1A73D9] border border-[#CFE6FF]">
+                  Audio-Out
+                </span>
+              </div>
+              <p className="text-[11px] text-[#5B6B7F] truncate mt-0.5">
+                {isVoicePlaying
+                  ? 'Browser speech synthesis is reading the executive call recap'
+                  : 'Listen to a natural audio recap of client needs, agreed dates, and next steps'}
+              </p>
+            </div>
+          </div>
+
+          <div className="hidden sm:flex items-center gap-2 shrink-0">
+            {isVoicePlaying && (
+              <span className="flex items-center gap-1 text-[11px] font-mono font-bold text-rose-600">
+                <Volume2 className="w-4 h-4 animate-bounce" />
+                <span>Playing</span>
+              </span>
+            )}
+          </div>
+        </div>
+
+        {/* Right: Grounding & Provenance Toggle */}
+        <div className="md:col-span-4 p-4 rounded-2xl bg-white/85 border border-[#CFE6FF] shadow-2xs flex items-center justify-between gap-2">
+          <div className="min-w-0">
+            <span className="text-xs font-bold text-[#0F172A] block">Zero-Hallucination Audit</span>
+            <span className="text-[11px] text-[#5B6B7F] block truncate">Inspect raw dictated transcript</span>
+          </div>
+          <button
+            type="button"
+            onClick={() => setShowGroundingDrawer((prev) => !prev)}
+            className={`inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold rounded-xl border transition-all cursor-pointer shrink-0 ${
+              showGroundingDrawer
+                ? 'bg-[#1A73D9] text-white border-[#1A73D9] shadow-2xs'
+                : 'bg-white text-[#1A73D9] border-[#CFE6FF] hover:bg-[#F3F9FF]'
+            }`}
+          >
+            {showGroundingDrawer ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
+            <span>{showGroundingDrawer ? 'Hide Source' : 'View Source'}</span>
+          </button>
+        </div>
+      </div>
+
+      {/* Expandable Grounding & Transcript Drawer */}
+      {showGroundingDrawer && (
+        <div className="mb-6 p-5 rounded-3xl bg-slate-50 border border-slate-200 shadow-inner animate-fadeIn space-y-3">
+          <div className="flex items-center justify-between border-b border-slate-200 pb-3">
+            <div className="flex items-center gap-2">
+              <FileText className="w-4 h-4 text-[#1A73D9]" />
+              <span className="text-xs font-bold text-[#0F172A] uppercase tracking-wider">
+                Raw Grounding Source (Dictated Transcript)
+              </span>
+            </div>
+            <span className="text-[11px] text-[#5B6B7F]">
+              Gemini guarantees 100% adherence to this source text
+            </span>
+          </div>
+
+          <div className="p-3.5 bg-white rounded-2xl border border-slate-200 text-xs text-[#0F172A] leading-relaxed font-mono whitespace-pre-wrap max-h-56 overflow-y-auto select-text shadow-2xs">
+            {rawTranscript}
+          </div>
+          <p className="text-[11px] text-[#5B6B7F] italic">
+            Notice: No commitments or prices appear in the follow-up artifacts that are not present in this raw dictation.
+          </p>
+        </div>
+      )}
+
       {/* Segmented Glass ARIA Tabs with Sliding Active Pill */}
       <div
         role="tablist"
@@ -572,8 +783,9 @@ export const ResultsScreen: React.FC<ResultsScreenProps> = ({
       {/* TAB PANEL 1: Follow-up Email */}
       {activeTab === 'email' && (
         <GlassCard className="p-6 sm:p-8 bg-white/85 border border-white/95 shadow-[0_12px_36px_rgba(26,115,217,0.08)] space-y-6 animate-fadeIn">
-          {/* Tone Selector Toolbar */}
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-4 border-b border-[#E4F1FF]">
+          {/* Tone Selector & 1-Click Dispatch Hub */}
+          <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4 pb-4 border-b border-[#E4F1FF]">
+            {/* Tone selector */}
             <div className="flex items-center gap-2">
               <span className="text-xs font-bold text-[#0F172A] uppercase tracking-wider">
                 Email Tone:
@@ -603,36 +815,98 @@ export const ResultsScreen: React.FC<ResultsScreenProps> = ({
               )}
             </div>
 
-            <button
-              type="button"
-              onClick={handleCopyEmail}
-              className="inline-flex items-center gap-1.5 px-4 py-2 text-xs font-bold text-[#0F172A] bg-white border border-[#CFE6FF] rounded-xl hover:bg-[#F3F9FF] hover:text-[#1A73D9] transition-all shadow-2xs self-start sm:self-auto cursor-pointer"
-            >
-              {copiedEmail ? (
-                <>
-                  <Check className="w-3.5 h-3.5 text-emerald-600" />
-                  <span className="text-emerald-700 font-bold">Email Copied!</span>
-                </>
-              ) : (
-                <>
-                  <Copy className="w-3.5 h-3.5 text-[#1A73D9]" />
-                  <span>Copy email</span>
-                </>
-              )}
-            </button>
+            {/* 1-Click Send / Dispatch Toolbar */}
+            <div className="flex flex-wrap items-center gap-2">
+              <a
+                href={buildGmailWebUrl({
+                  to: clientEmail,
+                  subject: emailSubject,
+                  body: emailBody,
+                })}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold text-white bg-[#EA4335] hover:bg-[#D93025] rounded-xl shadow-2xs transition-all cursor-pointer"
+                title="Opens prefilled draft in Gmail Web in a new tab"
+              >
+                <Send className="w-3 h-3" />
+                <span>Open in Gmail</span>
+              </a>
+
+              <a
+                href={buildOutlookWebMailUrl({
+                  to: clientEmail,
+                  subject: emailSubject,
+                  body: emailBody,
+                })}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold text-white bg-[#0078D4] hover:bg-[#006cbd] rounded-xl shadow-2xs transition-all cursor-pointer"
+                title="Opens prefilled draft in Outlook Web in a new tab"
+              >
+                <ExternalLink className="w-3 h-3" />
+                <span>Outlook Web</span>
+              </a>
+
+              <a
+                href={buildMailtoUrl({
+                  to: clientEmail,
+                  subject: emailSubject,
+                  body: emailBody,
+                })}
+                className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-[#0F172A] bg-white border border-[#CFE6FF] rounded-xl hover:bg-[#F3F9FF] transition-all shadow-2xs cursor-pointer"
+                title="Opens your computer or phone's default mail app"
+              >
+                <Mail className="w-3 h-3 text-[#1A73D9]" />
+                <span>Mail app</span>
+              </a>
+
+              <button
+                type="button"
+                onClick={handleCopyEmail}
+                className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold text-[#0F172A] bg-white border border-[#CFE6FF] rounded-xl hover:bg-[#F3F9FF] hover:text-[#1A73D9] transition-all shadow-2xs cursor-pointer"
+              >
+                {copiedEmail ? (
+                  <>
+                    <Check className="w-3 h-3 text-emerald-600" />
+                    <span className="text-emerald-700 font-bold">Copied!</span>
+                  </>
+                ) : (
+                  <>
+                    <Copy className="w-3 h-3 text-[#1A73D9]" />
+                    <span>Copy</span>
+                  </>
+                )}
+              </button>
+            </div>
           </div>
 
-          {/* Subject Field */}
-          <div className="space-y-1.5">
-            <label className="text-xs font-bold text-[#0F172A] uppercase tracking-wider">
-              Subject Line
-            </label>
-            <input
-              type="text"
-              value={emailSubject}
-              onChange={(e) => setEmailSubject(e.target.value)}
-              className="w-full px-4 py-2.5 text-sm font-semibold text-[#0F172A] bg-white border border-[#CFE6FF] rounded-xl focus:outline-none focus:border-[#1A73D9] focus:ring-2 focus:ring-[#1A73D9]/20"
-            />
+          {/* Client Recipient & Subject Header Fields */}
+          <div className="grid grid-cols-1 sm:grid-cols-12 gap-3.5">
+            <div className="sm:col-span-4 space-y-1">
+              <label className="text-[11px] font-bold text-[#0F172A] uppercase tracking-wider flex items-center gap-1">
+                <User className="w-3 h-3 text-[#1A73D9]" />
+                <span>Recipient Email</span>
+              </label>
+              <input
+                type="email"
+                value={clientEmail}
+                onChange={(e) => setClientEmail(e.target.value)}
+                placeholder="client@company.com"
+                className="w-full px-3 py-2 text-xs font-mono text-[#0F172A] bg-white border border-[#CFE6FF] rounded-xl focus:outline-none focus:border-[#1A73D9] focus:ring-2 focus:ring-[#1A73D9]/20"
+              />
+            </div>
+
+            <div className="sm:col-span-8 space-y-1">
+              <label className="text-[11px] font-bold text-[#0F172A] uppercase tracking-wider">
+                Subject Line
+              </label>
+              <input
+                type="text"
+                value={emailSubject}
+                onChange={(e) => setEmailSubject(e.target.value)}
+                className="w-full px-3 py-2 text-xs font-semibold text-[#0F172A] bg-white border border-[#CFE6FF] rounded-xl focus:outline-none focus:border-[#1A73D9] focus:ring-2 focus:ring-[#1A73D9]/20"
+              />
+            </div>
           </div>
 
           {/* Email Body Field */}
@@ -851,7 +1125,7 @@ export const ResultsScreen: React.FC<ResultsScreenProps> = ({
       {/* TAB PANEL 3: Internal Handoff Note */}
       {activeTab === 'internal' && (
         <GlassCard className="p-6 sm:p-8 bg-white/85 border border-white/95 rounded-3xl shadow-[0_12px_36px_rgba(26,115,217,0.08)] space-y-6 animate-fadeIn">
-          <div className="flex items-center justify-between pb-4 border-b border-[#E4F1FF]">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-4 border-b border-[#E4F1FF]">
             <div>
               <h3 className="text-xs font-bold uppercase tracking-wider text-[#0F172A]">
                 Team Handoff Bullets (5–8 Items)
@@ -860,23 +1134,66 @@ export const ResultsScreen: React.FC<ResultsScreenProps> = ({
                 Internal-only context for solution architects, project managers, and leadership.
               </p>
             </div>
-            <button
-              type="button"
-              onClick={handleCopyNotes}
-              className="inline-flex items-center gap-1.5 px-3.5 py-2 text-xs font-semibold text-[#0F172A] bg-white border border-[#CFE6FF] rounded-xl hover:bg-[#F3F9FF] hover:text-[#1A73D9] transition-all shadow-2xs cursor-pointer"
-            >
-              {copiedNotes ? (
-                <>
-                  <Check className="w-3.5 h-3.5 text-emerald-600" />
-                  <span className="text-emerald-700 font-bold">Notes Copied!</span>
-                </>
-              ) : (
-                <>
-                  <Copy className="w-3.5 h-3.5 text-[#1A73D9]" />
-                  <span>Copy notes</span>
-                </>
-              )}
-            </button>
+
+            {/* Team Export Toolbar: Slack, Markdown & Bullets */}
+            <div className="flex flex-wrap items-center gap-2 self-start sm:self-auto">
+              <button
+                type="button"
+                onClick={handleCopySlack}
+                className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold text-white bg-[#4A154B] hover:bg-[#3c113d] rounded-xl shadow-2xs transition-all cursor-pointer"
+                title="Copies formatted Slack message with emojis, next steps, and client signals"
+              >
+                {copiedSlack ? (
+                  <>
+                    <Check className="w-3.5 h-3.5 text-emerald-300" />
+                    <span>Slack Copied!</span>
+                  </>
+                ) : (
+                  <>
+                    <MessageSquare className="w-3.5 h-3.5" />
+                    <span>Copy for Slack</span>
+                  </>
+                )}
+              </button>
+
+              <button
+                type="button"
+                onClick={handleCopyMarkdown}
+                className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-[#0F172A] bg-white border border-[#CFE6FF] hover:bg-[#F3F9FF] rounded-xl shadow-2xs transition-all cursor-pointer"
+                title="Copies Notion/Jira/Linear markdown with checklists and CRM table"
+              >
+                {copiedMarkdown ? (
+                  <>
+                    <Check className="w-3.5 h-3.5 text-emerald-600" />
+                    <span className="text-emerald-700 font-bold">Markdown Copied!</span>
+                  </>
+                ) : (
+                  <>
+                    <Share2 className="w-3.5 h-3.5 text-[#1A73D9]" />
+                    <span>Notion / Markdown</span>
+                  </>
+                )}
+              </button>
+
+              <button
+                type="button"
+                onClick={handleCopyNotes}
+                className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-[#5B6B7F] hover:text-[#0F172A] bg-white border border-[#CFE6FF] hover:bg-[#F3F9FF] rounded-xl transition-all shadow-2xs cursor-pointer"
+                title="Copy bullet points only"
+              >
+                {copiedNotes ? (
+                  <>
+                    <Check className="w-3.5 h-3.5 text-emerald-600" />
+                    <span className="text-emerald-700 font-bold">Copied!</span>
+                  </>
+                ) : (
+                  <>
+                    <Copy className="w-3.5 h-3.5 text-[#1A73D9]" />
+                    <span>Bullets</span>
+                  </>
+                )}
+              </button>
+            </div>
           </div>
 
           <div className="space-y-3">
@@ -1053,6 +1370,21 @@ export const ResultsScreen: React.FC<ResultsScreenProps> = ({
       {/* Floating Sticky Glass Action Bar for Results */}
       <div className="fixed bottom-4 inset-x-4 sm:inset-x-auto sm:right-8 z-30 pointer-events-none">
         <div className="pointer-events-auto p-2 bg-white/95 backdrop-blur-xl border border-white/95 shadow-[0_12px_40px_rgba(26,115,217,0.2)] rounded-2xl flex items-center gap-2">
+          <a
+            href={buildGmailWebUrl({
+              to: clientEmail,
+              subject: emailSubject,
+              body: emailBody,
+            })}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="inline-flex items-center gap-1.5 px-3 py-2 text-xs font-bold text-white bg-[#EA4335] hover:bg-[#D93025] rounded-xl transition-all shadow-2xs cursor-pointer"
+            title="Draft in Gmail Web"
+          >
+            <Send className="w-3.5 h-3.5" />
+            <span className="hidden sm:inline">Gmail Draft</span>
+          </a>
+
           <button
             type="button"
             onClick={handleCopyEmail}

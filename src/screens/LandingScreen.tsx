@@ -29,8 +29,9 @@ import { SpotlightCard } from '../components/visuals/SpotlightCard';
 interface LandingScreenProps {
   onStartNew: () => void;
   onTrySample: () => void;
-  onViewHistory: () => void;
+  onViewHistory?: () => void;
   onOpenTour?: () => void;
+  onInstantJudgeDemo?: () => void;
 }
 
 export const LandingScreen: React.FC<LandingScreenProps> = ({
@@ -38,6 +39,7 @@ export const LandingScreen: React.FC<LandingScreenProps> = ({
   onTrySample,
   onViewHistory,
   onOpenTour,
+  onInstantJudgeDemo,
 }) => {
   const { isGuest } = useAuth();
   const [activePreviewTab, setActivePreviewTab] = useState<'email' | 'crm' | 'notes' | 'nextStep'>('email');
@@ -80,13 +82,25 @@ export const LandingScreen: React.FC<LandingScreenProps> = ({
                 <ArrowRight className="w-4 h-4 ml-1" />
               </button>
 
-              <button
-                onClick={onTrySample}
-                className="inline-flex items-center justify-center gap-2 px-5 py-3.5 text-sm font-semibold text-[#0F172A] bg-white/80 hover:bg-white border border-[#CFE6FF] hover:border-[#1A73D9]/30 rounded-xl shadow-[inset_0_1px_0_rgba(255,255,255,1),0_2px_8px_rgba(26,115,217,0.06)] hover:text-[#1A73D9] hover:-translate-y-0.5 transition-all active:translate-y-[1px] cursor-pointer"
-              >
-                <Sparkles className="w-4 h-4 text-[#1A73D9]" />
-                <span>Try sample call note</span>
-              </button>
+              {onInstantJudgeDemo ? (
+                <button
+                  type="button"
+                  onClick={onInstantJudgeDemo}
+                  className="inline-flex items-center justify-center gap-2 px-5 py-3.5 text-sm font-bold text-amber-950 bg-gradient-to-r from-amber-100 to-amber-50 hover:from-amber-200 hover:to-amber-100 border border-amber-300 rounded-xl shadow-xs transition-all hover:-translate-y-0.5 cursor-pointer"
+                  title="Zero-friction hackathon evaluation: directly populates artifacts without recording"
+                >
+                  <Zap className="w-4 h-4 text-amber-600 fill-amber-500" />
+                  <span>⚡ Instant Demo (Judge Quick-Test)</span>
+                </button>
+              ) : (
+                <button
+                  onClick={onTrySample}
+                  className="inline-flex items-center justify-center gap-2 px-5 py-3.5 text-sm font-semibold text-[#0F172A] bg-white/80 hover:bg-white border border-[#CFE6FF] hover:border-[#1A73D9]/30 rounded-xl shadow-[inset_0_1px_0_rgba(255,255,255,1),0_2px_8px_rgba(26,115,217,0.06)] hover:text-[#1A73D9] hover:-translate-y-0.5 transition-all active:translate-y-[1px] cursor-pointer"
+                >
+                  <Sparkles className="w-4 h-4 text-[#1A73D9]" />
+                  <span>Try sample call note</span>
+                </button>
+              )}
             </div>
 
             {/* Quick trust metrics */}

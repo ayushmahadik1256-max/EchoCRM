@@ -16,12 +16,14 @@ interface NavbarProps {
   currentView: 'landing' | 'new' | 'history' | 'results';
   onNavigate: (view: 'landing' | 'new' | 'history') => void;
   onUseSampleDirectly: () => void;
+  onInstantJudgeDemo?: () => void;
 }
 
 export const Navbar: React.FC<NavbarProps> = ({
   currentView,
   onNavigate,
   onUseSampleDirectly,
+  onInstantJudgeDemo,
 }) => {
   const { user, isGuest, signIn, signOut, openProfileModal } = useAuth();
   const [isScrolled, setIsScrolled] = useState(false);
@@ -94,6 +96,17 @@ export const Navbar: React.FC<NavbarProps> = ({
               <Sparkles className="w-3.5 h-3.5 text-[#1A73D9]" />
               <span>Try Sample Note</span>
             </button>
+
+            {onInstantJudgeDemo && (
+              <button
+                type="button"
+                onClick={onInstantJudgeDemo}
+                className="flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl bg-gradient-to-r from-amber-50 to-orange-50 border border-amber-200 text-amber-900 font-bold hover:border-amber-300 hover:shadow-2xs transition-all cursor-pointer"
+                title="1-click Hackathon Judge Demo: Instantly populates full follow-up artifacts"
+              >
+                <span>⚡ Instant Demo</span>
+              </button>
+            )}
 
             <button
               onClick={() => onNavigate('landing')}

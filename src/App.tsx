@@ -32,7 +32,7 @@ import {
   updateDebriefInFirestore,
   deleteDebriefFromFirestore,
 } from './services/firebase';
-import { SAMPLE_DICTATED_NOTE, SAMPLE_METADATA } from './data/sampleNotes';
+import { SAMPLE_DICTATED_NOTE, SAMPLE_METADATA, PREGENERATED_SAMPLE_RESULT } from './data/sampleNotes';
 import { PageTransition } from './components/PageTransition';
 
 type ViewMode = 'landing' | 'new' | 'history' | 'results';
@@ -209,6 +209,20 @@ function MainApp() {
     setCurrentView('new');
   };
 
+  // 1-Click Judge Instant Demo Trigger (Zero-friction evaluation)
+  const handleInstantJudgeDemo = () => {
+    const emailWithSig = appendUserSignature(PREGENERATED_SAMPLE_RESULT.emailBody);
+    setActiveResult({
+      ...PREGENERATED_SAMPLE_RESULT,
+      emailBody: emailWithSig,
+    });
+    setActiveMetadata(SAMPLE_METADATA);
+    setActiveTranscript(SAMPLE_DICTATED_NOTE);
+    setActiveDebriefId(undefined);
+    setActiveUsedFallback(true);
+    setCurrentView('results');
+  };
+
   // Start fresh debrief
   const handleStartNewDebrief = () => {
     setPresetTranscript('');
@@ -249,6 +263,7 @@ function MainApp() {
           }
         }}
         onUseSampleDirectly={handleTrySampleCall}
+        onInstantJudgeDemo={handleInstantJudgeDemo}
       />
 
       {/* Main Screen Body */}
@@ -258,6 +273,7 @@ function MainApp() {
           <LandingScreen
             onStartNew={handleStartNewDebrief}
             onTrySample={handleTrySampleCall}
+            onInstantJudgeDemo={handleInstantJudgeDemo}
             onViewHistory={() => setCurrentView('history')}
             onOpenTour={() => setShowOnboarding(true)}
           />
