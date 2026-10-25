@@ -49,6 +49,7 @@ interface NewDebriefScreenProps {
     transcript: string,
     usedFallback?: boolean,
   ) => void;
+  onRequestSignIn?: () => void;
 }
 
 const DEAL_STAGES: DealStage[] = [
@@ -64,6 +65,7 @@ export const NewDebriefScreen: React.FC<NewDebriefScreenProps> = ({
   initialTranscript = '',
   initialMetadata = {},
   onGenerateSuccess,
+  onRequestSignIn,
 }) => {
   const { userProfile, emailSignature, user } = useAuth();
 
@@ -479,9 +481,15 @@ export const NewDebriefScreen: React.FC<NewDebriefScreenProps> = ({
                 )}
                 <button
                   type="button"
-                  onClick={() => setShowTemplateManager(true)}
+                  onClick={() => {
+                    if (!user) {
+                      onRequestSignIn?.();
+                      return;
+                    }
+                    setShowTemplateManager(true);
+                  }}
                   className="inline-flex items-center gap-1 text-[11px] font-semibold text-[#5B6B7F] hover:text-[#1A73D9] transition-colors cursor-pointer"
-                  title="Manage custom templates"
+                  title={user ? 'Manage custom templates' : 'Sign in to manage custom templates'}
                 >
                   <Settings2 className="w-3 h-3" />
                   <span>Manage</span>
@@ -739,11 +747,13 @@ export const NewDebriefScreen: React.FC<NewDebriefScreenProps> = ({
       </div>
 
       {/* Template Manager Modal */}
-      <TemplateManagerModal
-        isOpen={showTemplateManager}
-        onClose={() => setShowTemplateManager(false)}
-        onTemplatesChanged={(tpls) => setUserTemplates(tpls)}
-      />
+      {user && (
+        <TemplateManagerModal
+          isOpen={showTemplateManager}
+          onClose={() => setShowTemplateManager(false)}
+          onTemplatesChanged={(tpls) => setUserTemplates(tpls)}
+        />
+      )}
     </div>
   );
 };

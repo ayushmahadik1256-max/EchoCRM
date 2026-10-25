@@ -4,6 +4,7 @@ import {
   History,
   PlusCircle,
   LogOut,
+  LogIn,
   Sliders,
   Sparkles,
   HelpCircle,
@@ -14,6 +15,7 @@ import { ScrollProgressBar } from './visuals/ScrollProgressBar';
 interface NavbarProps {
   currentView: 'landing' | 'new' | 'history' | 'results';
   onNavigate: (view: 'landing' | 'new' | 'history') => void;
+  onRequestSignIn: () => void;
   onUseSampleDirectly: () => void;
   onInstantJudgeDemo?: () => void;
 }
@@ -21,6 +23,7 @@ interface NavbarProps {
 export const Navbar: React.FC<NavbarProps> = ({
   currentView,
   onNavigate,
+  onRequestSignIn,
   onUseSampleDirectly,
   onInstantJudgeDemo,
 }) => {
@@ -122,38 +125,51 @@ export const Navbar: React.FC<NavbarProps> = ({
 
           {/* Zone 3: Settings & Auth Actions */}
           <div className="flex items-center gap-2 shrink-0">
-            <button
-              type="button"
-              onClick={openProfileModal}
-              className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-[#0F172A] bg-white/80 border border-white/90 shadow-[inset_0_1px_0_rgba(255,255,255,1),0_1px_3px_rgba(26,115,217,0.06)] rounded-xl hover:bg-white hover:text-[#1A73D9] hover:border-[#1A73D9]/20 transition-all cursor-pointer min-h-[36px]"
-              title="Configure Profile, Signature & Preferences"
-              aria-label="Settings"
-            >
-              <Sliders className="w-3.5 h-3.5 text-[#1A73D9]" />
-              <span className="hidden sm:inline">Settings</span>
-            </button>
-
-            <div className="flex items-center gap-1.5 bg-white/80 border border-white/90 shadow-2xs p-1 rounded-xl">
+            {user ? (
+              <>
                 <button
                   type="button"
                   onClick={openProfileModal}
-                  className="flex items-center gap-2 text-xs text-[#0F172A] hover:text-[#1A73D9] px-2 py-1 rounded-lg transition-colors cursor-pointer"
-                  title="View & Edit Profile / Signature"
+                  className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-[#0F172A] bg-white/80 border border-white/90 shadow-[inset_0_1px_0_rgba(255,255,255,1),0_1px_3px_rgba(26,115,217,0.06)] rounded-xl hover:bg-white hover:text-[#1A73D9] hover:border-[#1A73D9]/20 transition-all cursor-pointer min-h-[36px]"
+                  title="Configure Profile, Signature & Preferences"
+                  aria-label="Settings"
                 >
-                  <span className="w-2 h-2 rounded-full bg-emerald-500" aria-hidden="true" />
-                  <span className="font-semibold max-w-[120px] truncate">
-                    {user?.displayName || user?.email?.split('@')[0]}
-                  </span>
+                  <Sliders className="w-3.5 h-3.5 text-[#1A73D9]" />
+                  <span className="hidden sm:inline">Settings</span>
                 </button>
-                <button
-                  onClick={signOut}
-                  className="p-1.5 text-[#5B6B7F] hover:text-[#0F172A] rounded-lg hover:bg-white transition-colors cursor-pointer"
-                  title="Sign out"
-                  aria-label="Sign out"
-                >
-                  <LogOut className="w-3.5 h-3.5" />
-                </button>
-            </div>
+
+                <div className="flex items-center gap-1.5 bg-white/80 border border-white/90 shadow-2xs p-1 rounded-xl">
+                  <button
+                    type="button"
+                    onClick={openProfileModal}
+                    className="flex items-center gap-2 text-xs text-[#0F172A] hover:text-[#1A73D9] px-2 py-1 rounded-lg transition-colors cursor-pointer"
+                    title="View & Edit Profile / Signature"
+                  >
+                    <span className="w-2 h-2 rounded-full bg-emerald-500" aria-hidden="true" />
+                    <span className="font-semibold max-w-[120px] truncate">
+                      {user.displayName || user.email?.split('@')[0]}
+                    </span>
+                  </button>
+                  <button
+                    onClick={signOut}
+                    className="p-1.5 text-[#5B6B7F] hover:text-[#0F172A] rounded-lg hover:bg-white transition-colors cursor-pointer"
+                    title="Sign out"
+                    aria-label="Sign out"
+                  >
+                    <LogOut className="w-3.5 h-3.5" />
+                  </button>
+                </div>
+              </>
+            ) : (
+              <button
+                type="button"
+                onClick={onRequestSignIn}
+                className="inline-flex items-center gap-1.5 px-4 py-2 text-xs font-bold text-white bg-[#1A73D9] hover:bg-[#155FB5] rounded-xl shadow-[0_2px_10px_rgba(26,115,217,0.3)] transition-all cursor-pointer min-h-[36px]"
+              >
+                <LogIn className="w-3.5 h-3.5" />
+                <span>Sign in</span>
+              </button>
+            )}
           </div>
         </div>
 
@@ -199,13 +215,23 @@ export const Navbar: React.FC<NavbarProps> = ({
             <span>Ledger</span>
           </button>
 
-          <button
-            onClick={openProfileModal}
-            className="flex flex-col items-center justify-center py-1.5 px-3 rounded-xl text-[10px] font-semibold text-[#5B6B7F] hover:text-[#1A73D9] transition-all cursor-pointer"
-          >
-            <Sliders className="w-4 h-4 mb-0.5" />
-            <span>Settings</span>
-          </button>
+          {user ? (
+            <button
+              onClick={openProfileModal}
+              className="flex flex-col items-center justify-center py-1.5 px-3 rounded-xl text-[10px] font-semibold text-[#5B6B7F] hover:text-[#1A73D9] transition-all cursor-pointer"
+            >
+              <Sliders className="w-4 h-4 mb-0.5" />
+              <span>Settings</span>
+            </button>
+          ) : (
+            <button
+              onClick={onRequestSignIn}
+              className="flex flex-col items-center justify-center py-1.5 px-3 rounded-xl text-[10px] font-bold text-[#1A73D9] bg-[#E4F1FF] transition-all cursor-pointer"
+            >
+              <LogIn className="w-4 h-4 mb-0.5" />
+              <span>Sign in</span>
+            </button>
+          )}
         </nav>
       </div>
     </>

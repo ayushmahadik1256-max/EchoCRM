@@ -432,10 +432,14 @@ export const ResultsScreen: React.FC<ResultsScreenProps> = ({
       setSavedSuccess(true);
       setTimeout(() => setSavedSuccess(false), 2500);
     } catch (err) {
-      console.error('Error saving debrief:', err);
-      setSaveError(
-        'Could not save this debrief to Firebase. Check your connection and Firestore rules, then try again.',
-      );
+      if (err instanceof Error && err.message === 'SIGN_IN_CANCELLED') {
+        setSaveError('Sign-in cancelled — this debrief was not stored. You can save it anytime.');
+      } else {
+        console.error('Error saving debrief:', err);
+        setSaveError(
+          'Could not save this debrief to Firebase. Check your connection and Firestore rules, then try again.',
+        );
+      }
     } finally {
       setIsSaving(false);
     }

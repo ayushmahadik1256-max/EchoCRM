@@ -20,7 +20,7 @@ Dictate unstructured stream-of-consciousness impressions right after hanging up 
 - **Structured JSON Schema**: Strict `responseSchema` guarantees 100% parseable JSON with zero hallucinated bracket placeholders or invented commitments.
 - **User-Configurable Email Signature**: Set your custom closing sign-off, name, title, company, and contact info in Profile Settings. EchoCRM automatically appends your signature to all newly generated follow-ups and tone rewrites.
 - **Tone Rewriting**: Switch email tone between Warm, Professional, and Direct in real time via `/api/generate` (`mode: "email_tone"`).
-- **Google Sign-In & Firebase Cloud Storage**: Google authentication is required to use the app. Debriefs, profiles, and custom templates are stored in Cloud Firestore and scoped to the signed-in user. EchoCRM does not store application records in browser storage.
+- **Google Sign-In & Firebase Cloud Storage**: visitors can use the entire workflow anonymously — landing page, dictation, audio upload, sample/instant demo, generated email/CRM/handoff/next-step artifacts, and `.ics`/prefilled calendar links. Sign-in is requested only for account-backed actions: **saving a debrief**, **opening history**, and **managing custom templates**. Debriefs, profiles, and custom templates are stored in Cloud Firestore and scoped to the signed-in user.
 - **Action Items & Ledger**: KPI summary strip (Total, Open, Overdue, Due Today, Done), inline status toggling, search, filtering by deal stage and relative due dates.
 - **Calendar Sync**: Three ways to schedule the generated next step —
   1. **Sync to Google** writes the event straight into the user's primary Google Calendar through the Calendar REST API (OAuth `calendar.events` scope, one consent prompt, no second save click).
@@ -69,7 +69,7 @@ These settings are public Firebase Web App settings and are safe in the client b
 
 1. **Authentication → Sign-in method**: enable **Google**.
 2. **Authentication → Settings → Authorized domains**: add `localhost`, your `*.vercel.app` domain, and any custom domain. Google Sign-In popups fail until this is done.
-3. **Firestore → Rules**: deploy `firestore.rules` **to the named database** `ai-studio-8fba4b67-2817-4e9e-af30-7d50a209315d` (pick it in the database selector in the console, or configure it in `firebase.json`). The rules restrict each user's debriefs, profile, and templates to `request.auth.uid`.
+3. **Firestore → Rules**: deploy `firestore.rules` **to the named database** `ai-studio-8fba4b67-2817-4e9e-af30-7d50a209315d`. The Firebase Console only publishes rules to the `(default)` database, so use the CLI: `npx firebase-tools deploy --only firestore:rules` (already configured in `firebase.json`). The rules restrict each user's debriefs, profile, and templates to `request.auth.uid`.
 4. Firestore's `(default)` database is **not** used by this app.
 
 ### What is stored where
@@ -82,7 +82,7 @@ These settings are public Firebase Web App settings and are safe in the client b
 | Google Calendar OAuth token | `sessionStorage` only (browser session) |
 | Audio recordings | Never stored — sent to Gemini for transcription only |
 
-Firebase Storage, Cloud Messaging, and Analytics are not used. Firebase Auth persists the sign-in session in the browser (standard Firebase behavior); no application records live in `localStorage`.
+Firebase Storage, Cloud Messaging, and Analytics are not used. Firebase Auth persists the sign-in session in the browser (standard Firebase behavior); no application records live in `localStorage`. A debrief generated anonymously lives only in the current tab's memory until the visitor signs in and saves it.
 
 ### Google Calendar sync
 
@@ -144,7 +144,14 @@ git push
 
 1. **Authorized domains** — Google Sign-In fails on the Vercel domain until it is added: Firebase Console → **Authentication → Settings → Authorized domains** → add `your-project.vercel.app` (and any custom domain).
    - Preview deployments get a unique URL per commit, and Firebase does not support wildcard entries. Either add the specific preview domain or demo from the production URL.
-2. **Firestore rules** — Firebase Console → **Firestore Database → Rules**, select the `ai-studio-8fba4b67-2817-4e9e-af30-7d50a209315d` database, paste `firestore.rules`, and publish. Without this, every read/write is denied. Re-publish whenever `firestore.rules` changes (the repo version is the source of truth).
+2. **Firestore rules** — this app uses a **named** database (`ai-studio-8fba4b67-2817-4e9e-af30-7d50a209315d`), and the Firebase Console can only publish rules to the `(default)` database. Deploy them with the Firebase CLI from the repo root:
+
+   ```bash
+   npx firebase-tools login
+   npx firebase-tools deploy --only firestore:rules
+   ```
+
+   `firebase.json` and `.firebaserc` are already configured for the named database. Use `npx firebase-tools deploy --only firestore:ai-studio-8fba4b67-2817-4e9e-af30-7d50a209315d` to target only that database. Without published rules, every read/write is denied; re-run the deploy whenever `firestore.rules` changes (the repo version is the source of truth).
 3. **Calendar sync (optional)** — enable the Google Calendar API and add the `calendar.events` scope to the OAuth consent screen (see [Google Calendar sync](#google-calendar-sync)).
 
 ### 4. Verify the deployment
@@ -152,6 +159,7 @@ git push
 Open these after deploying:
 
 - `https://your-project.vercel.app/api/health` → should return `{"status":"ok", ...}` with `"hasApiKey":true`.
+- Open the root URL in a private window — the landing page should render and a debrief can be generated without signing in. Clicking **Save Debrief** or **Debrief History** should open the Google sign-in dialog.
 - Sign in with Google, generate a debrief, save it, then reload — it should come back from Firestore.
 
 ### Deploy from the CLI (alternative)

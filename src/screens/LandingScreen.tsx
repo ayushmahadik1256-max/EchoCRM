@@ -101,6 +101,11 @@ export const LandingScreen: React.FC<LandingScreenProps> = ({
               )}
             </div>
 
+            <p className="flex items-center gap-1.5 text-[11px] text-[#5B6B7F]">
+              <ShieldCheck className="w-3.5 h-3.5 text-[#1A73D9]" />
+              <span>Free to explore — sign in only when you want to save a debrief.</span>
+            </p>
+
             {/* Quick trust metrics */}
             <div className="pt-6 border-t border-[#E4F1FF] flex flex-wrap items-center gap-6 sm:gap-8 text-xs text-[#5B6B7F]">
               <div className="flex items-center gap-2">
