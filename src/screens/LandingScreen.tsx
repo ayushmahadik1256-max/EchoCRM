@@ -15,7 +15,6 @@ import {
   Layers3,
 } from 'lucide-react';
 import { motion } from 'motion/react';
-import { useAuth } from '../hooks/useAuth';
 import { TiltCard } from '../components/TiltCard';
 import { GlassCard } from '../components/GlassCard';
 import { VoiceTransformationVisual } from '../components/VoiceTransformationVisual';
@@ -41,7 +40,6 @@ export const LandingScreen: React.FC<LandingScreenProps> = ({
   onOpenTour,
   onInstantJudgeDemo,
 }) => {
-  const { isGuest } = useAuth();
   const [activePreviewTab, setActivePreviewTab] = useState<'email' | 'crm' | 'notes' | 'nextStep'>('email');
 
   return (

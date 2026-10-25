@@ -121,24 +121,10 @@ export interface CallTemplate {
   preferredTone: EmailTone;
   suggestedPrompts: string[];
   placeholderHint: string;
-  /** true for user-created templates stored in Firestore / localStorage */
+  /** true for user-created templates stored in Firestore */
   isCustom?: boolean;
   createdAt?: string;
   updatedAt?: string;
 }
-/** A user-created call template (built-ins live in src/data/templates.ts). */
-export interface StoredTemplate {
-  id: string;
-  userId: string;
-  name: string;
-  description: string;
-  prompts: string[];
-  defaultDealStage: DealStage;
-  preferredTone: EmailTone;
-  isCustom: boolean;
-  createdAt: string;
-  updatedAt: string;
-}
-
 
 

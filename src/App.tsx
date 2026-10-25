@@ -6,7 +6,6 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { AuthProvider, useAuth } from './hooks/useAuth';
 import { Navbar } from './components/Navbar';
-import { GuestBanner } from './components/GuestBanner';
 import { ProfileSettingsModal } from './components/ProfileSettingsModal';
 import { OnboardingModal } from './components/OnboardingModal';
 import { AmbientBackground } from './components/AmbientBackground';
@@ -21,12 +20,6 @@ import {
   DealStage,
 } from './types';
 import {
-  getGuestDebriefs,
-  saveGuestDebrief,
-  updateGuestDebrief,
-  deleteGuestDebrief,
-} from './services/localStore';
-import {
   fetchUserDebriefs,
   saveDebriefToFirestore,
   updateDebriefInFirestore,
@@ -38,30 +31,17 @@ import { PageTransition } from './components/PageTransition';
 type ViewMode = 'landing' | 'new' | 'history' | 'results';
 
 function MainApp() {
-  const { user, isGuest, refreshGuestCount, appendUserSignature } = useAuth();
+  const { user, loading: authLoading, signIn, appendUserSignature } = useAuth();
 
   const [currentView, setCurrentView] = useState<ViewMode>('landing');
   const [debriefs, setDebriefs] = useState<DebriefDocument[]>([]);
-  const [loadingDebriefs, setLoadingDebriefs] = useState(false);
+  const [debriefLoadError, setDebriefLoadError] = useState<string | null>(null);
+  const [signInError, setSignInError] = useState<string | null>(null);
+  const [signingIn, setSigningIn] = useState(false);
 
-  // First-run guided onboarding state
   const [showOnboarding, setShowOnboarding] = useState(false);
 
-  useEffect(() => {
-    try {
-      const completed = localStorage.getItem('echocrm_onboarding_completed');
-      if (!completed) {
-        setShowOnboarding(true);
-      }
-    } catch (e) {
-      // Ignore if localStorage unavailable
-    }
-  }, []);
-
   const handleCloseOnboarding = () => {
-    try {
-      localStorage.setItem('echocrm_onboarding_completed', 'true');
-    } catch (e) {}
     setShowOnboarding(false);
   };
 
@@ -83,22 +63,17 @@ function MainApp() {
 
   // Load debriefs whenever auth state changes
   const loadDebriefs = useCallback(async () => {
-    setLoadingDebriefs(true);
+    if (!user) {
+      setDebriefs([]);
+      return;
+    }
+    setDebriefLoadError(null);
     try {
-      if (user) {
-        const firestoreList = await fetchUserDebriefs(user.uid);
-        setDebriefs(firestoreList);
-      } else {
-        const localList = getGuestDebriefs();
-        setDebriefs(localList);
-      }
+      const firestoreList = await fetchUserDebriefs(user.uid);
+      setDebriefs(firestoreList);
     } catch (err) {
       console.error('Failed to load debriefs:', err);
-      // Fallback to local storage if firestore read has issue
-      const localList = getGuestDebriefs();
-      setDebriefs(localList);
-    } finally {
-      setLoadingDebriefs(false);
+      setDebriefLoadError('Could not load your debriefs from Firebase. Please try again.');
     }
   }, [user]);
 
@@ -130,16 +105,12 @@ function MainApp() {
 
   // Handle saving a debrief from Results
   const handleSaveDebrief = async (docToSave: DebriefDocument) => {
-    if (user) {
-      const userDoc: DebriefDocument = {
-        ...docToSave,
-        userId: user.uid,
-      };
-      await saveDebriefToFirestore(userDoc);
-    } else {
-      saveGuestDebrief(docToSave);
-      refreshGuestCount();
-    }
+    if (!user) throw new Error('Sign in is required to save debriefs.');
+    const userDoc: DebriefDocument = {
+      ...docToSave,
+      userId: user.uid,
+    };
+    await saveDebriefToFirestore(userDoc);
     setActiveDebriefId(docToSave.id);
     await loadDebriefs();
   };
@@ -153,11 +124,8 @@ function MainApp() {
     );
 
     try {
-      if (user) {
-        await updateDebriefInFirestore(id, { status: newStatus });
-      } else {
-        updateGuestDebrief(id, { status: newStatus });
-      }
+      if (!user) throw new Error('Sign in is required to update debriefs.');
+      await updateDebriefInFirestore(id, { status: newStatus });
     } catch (err) {
       console.error('Failed to toggle status:', err);
       await loadDebriefs();
@@ -168,12 +136,8 @@ function MainApp() {
   const handleDeleteDebrief = async (id: string) => {
     setDebriefs((prev) => prev.filter((d) => d.id !== id));
     try {
-      if (user) {
-        await deleteDebriefFromFirestore(id);
-      } else {
-        deleteGuestDebrief(id);
-        refreshGuestCount();
-      }
+      if (!user) throw new Error('Sign in is required to delete debriefs.');
+      await deleteDebriefFromFirestore(id);
     } catch (err) {
       console.error('Failed to delete debrief:', err);
       await loadDebriefs();
@@ -230,13 +194,57 @@ function MainApp() {
     setCurrentView('new');
   };
 
+  const handleSignIn = async () => {
+    setSigningIn(true);
+    setSignInError(null);
+    try {
+      await signIn();
+    } catch (error) {
+      console.error('Google Sign-In failed:', error);
+      setSignInError('Google sign-in failed. Please try again.');
+    } finally {
+      setSigningIn(false);
+    }
+  };
+
+  if (authLoading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-[#F3F9FF] text-sm font-semibold text-[#5B6B7F]">
+        Connecting to Firebase…
+      </div>
+    );
+  }
+
+  if (!user) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-[#F3F9FF] px-4">
+        <div className="w-full max-w-md rounded-3xl border border-[#CFE6FF] bg-white p-8 text-center shadow-xl">
+          <h1 className="text-2xl font-extrabold tracking-tight text-[#0F172A]">EchoCRM</h1>
+          <p className="mt-3 text-sm leading-relaxed text-[#5B6B7F]">
+            Sign in with Google to use EchoCRM. Your debriefs, profile, and templates are stored in your Firebase account.
+          </p>
+          {signInError && (
+            <p role="alert" className="mt-4 rounded-xl bg-rose-50 px-3 py-2 text-sm text-rose-700">
+              {signInError}
+            </p>
+          )}
+          <button
+            type="button"
+            onClick={handleSignIn}
+            disabled={signingIn}
+            className="mt-6 w-full rounded-xl bg-[#1A73D9] px-4 py-3 text-sm font-bold text-white transition-colors hover:bg-[#155FB5] disabled:cursor-wait disabled:opacity-60"
+          >
+            {signingIn ? 'Signing in…' : 'Continue with Google'}
+          </button>
+        </div>
+      </div>
+    );
+  }
+
   return (
-    <div className="min-h-screen flex flex-col bg-white text-[#0F172A] relative selection:bg-[#CFE6FF] selection:text-[#0F172A]">
+    <div className="min-h-screen flex flex-col bg-transparent text-[#0F172A] relative selection:bg-[#CFE6FF] selection:text-[#0F172A]">
       {/* Ambient background with softly drifting light-blue orbs */}
       <AmbientBackground />
-
-      {/* Demo / Guest mode banner */}
-      <GuestBanner onImportComplete={loadDebriefs} />
 
       {/* Guided Onboarding Modal */}
       <OnboardingModal
@@ -268,6 +276,11 @@ function MainApp() {
 
       {/* Main Screen Body */}
       <main className="flex-1">
+        {debriefLoadError && (
+          <div role="alert" className="mx-auto mt-4 max-w-7xl px-4 text-sm text-rose-700">
+            {debriefLoadError}
+          </div>
+        )}
         <PageTransition viewKey={currentView}>
         {currentView === 'landing' && (
           <LandingScreen
@@ -311,7 +324,6 @@ function MainApp() {
             onToggleStatus={handleToggleStatus}
             onDeleteDebrief={handleDeleteDebrief}
             onNewDebrief={handleStartNewDebrief}
-            isGuest={isGuest}
           />
         )}
         </PageTransition>

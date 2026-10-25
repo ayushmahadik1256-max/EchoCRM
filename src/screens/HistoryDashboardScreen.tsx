@@ -32,7 +32,6 @@ interface HistoryDashboardScreenProps {
   onToggleStatus: (id: string, currentStatus: DebriefStatus) => void;
   onDeleteDebrief: (id: string) => void;
   onNewDebrief: () => void;
-  isGuest: boolean;
 }
 
 type DueFilter = 'All' | 'Overdue' | 'Today' | 'This week' | 'Later' | 'Done';
@@ -44,7 +43,6 @@ export const HistoryDashboardScreen: React.FC<HistoryDashboardScreenProps> = ({
   onToggleStatus,
   onDeleteDebrief,
   onNewDebrief,
-  isGuest,
 }) => {
   const [searchQuery, setSearchQuery] = useState('');
   const [stageFilter, setStageFilter] = useState<string>('All');

@@ -18,11 +18,6 @@ import {
   saveTemplateToFirestore,
   deleteTemplateFromFirestore,
 } from '../services/firebase';
-import {
-  getGuestTemplates,
-  saveGuestTemplate,
-  deleteGuestTemplate,
-} from '../services/localStore';
 import { GlassCard } from './GlassCard';
 
 const DEAL_STAGES: DealStage[] = [
@@ -63,7 +58,7 @@ export const TemplateManagerModal: React.FC<TemplateManagerModalProps> = ({
   onClose,
   onTemplatesChanged,
 }) => {
-  const { user, isGuest } = useAuth();
+  const { user } = useAuth();
   const [activeTab, setActiveTab] = useState<Tab>('my');
   const [userTemplates, setUserTemplates] = useState<CallTemplate[]>([]);
   const [loading, setLoading] = useState(false);
@@ -75,19 +70,18 @@ export const TemplateManagerModal: React.FC<TemplateManagerModalProps> = ({
   const [isSaving, setIsSaving] = useState(false);
   const [savedId, setSavedId] = useState<string | null>(null);
   const [deleteConfirmId, setDeleteConfirmId] = useState<string | null>(null);
+  const [actionError, setActionError] = useState<string | null>(null);
 
   const loadTemplates = useCallback(async () => {
     setLoading(true);
+    setActionError(null);
     try {
-      if (user) {
-        const tpls = await fetchUserTemplates(user.uid);
-        setUserTemplates(tpls);
-      } else {
-        const tpls = getGuestTemplates();
-        setUserTemplates(tpls);
-      }
+      if (!user) throw new Error('Sign in is required to load custom templates.');
+      const tpls = await fetchUserTemplates(user.uid);
+      setUserTemplates(tpls);
     } catch (err) {
       console.error('Failed to load templates:', err);
+      setActionError('Could not load your templates from Firebase. Check your connection and Firestore rules.');
     } finally {
       setLoading(false);
     }
@@ -126,15 +120,15 @@ export const TemplateManagerModal: React.FC<TemplateManagerModalProps> = ({
 
   const handleSave = async () => {
     if (!form.name.trim()) return;
+    if (!user) throw new Error('Sign in is required to save custom templates.');
     setIsSaving(true);
+    setActionError(null);
 
     const now = new Date().toISOString();
     const id = editingId || `tpl-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
-    const userId = user?.uid ?? 'guest';
-
     const template: CallTemplate = {
       id,
-      userId,
+      userId: user.uid,
       name: form.name.trim(),
       description: form.description.trim(),
       dealStage: form.dealStage,
@@ -147,25 +141,20 @@ export const TemplateManagerModal: React.FC<TemplateManagerModalProps> = ({
     };
 
     try {
-      if (user) {
-        await saveTemplateToFirestore(template);
-      } else {
-        saveGuestTemplate(template);
-      }
+      await saveTemplateToFirestore(template);
 
       setSavedId(id);
       setTimeout(() => setSavedId(null), 2000);
 
       await loadTemplates();
-      onTemplatesChanged(
-        user ? await fetchUserTemplates(user.uid) : getGuestTemplates(),
-      );
+      onTemplatesChanged(await fetchUserTemplates(user.uid));
 
       setShowForm(false);
       setEditingId(null);
       setForm(EMPTY_FORM);
     } catch (err) {
       console.error('Failed to save template:', err);
+      setActionError('Could not save this template to Firebase. Please try again.');
     } finally {
       setIsSaving(false);
     }
@@ -173,18 +162,15 @@ export const TemplateManagerModal: React.FC<TemplateManagerModalProps> = ({
 
   const handleDelete = async (tplId: string) => {
     try {
-      if (user) {
-        await deleteTemplateFromFirestore(tplId);
-      } else {
-        deleteGuestTemplate(tplId);
-      }
+      if (!user) throw new Error('Sign in is required to delete custom templates.');
+      setActionError(null);
+      await deleteTemplateFromFirestore(tplId);
       await loadTemplates();
-      onTemplatesChanged(
-        user ? await fetchUserTemplates(user.uid) : getGuestTemplates(),
-      );
+      onTemplatesChanged(await fetchUserTemplates(user.uid));
       setDeleteConfirmId(null);
     } catch (err) {
       console.error('Failed to delete template:', err);
+      setActionError('Could not delete this template. Please try again.');
     }
   };
 
@@ -254,6 +240,15 @@ export const TemplateManagerModal: React.FC<TemplateManagerModalProps> = ({
 
         {/* Body */}
         <div className="flex-1 overflow-y-auto px-6 py-4 space-y-3">
+          {actionError && (
+            <div
+              role="alert"
+              className="flex items-start gap-2 rounded-2xl border border-rose-200 bg-rose-50 px-3 py-2.5 text-[11px] text-rose-900"
+            >
+              <AlertCircle className="w-3.5 h-3.5 text-rose-600 shrink-0 mt-0.5" />
+              <span>{actionError}</span>
+            </div>
+          )}
           {/* My Templates Tab */}
           {activeTab === 'my' && (
             <>
@@ -491,12 +486,6 @@ export const TemplateManagerModal: React.FC<TemplateManagerModalProps> = ({
                 </div>
               )}
 
-              {isGuest && (
-                <div className="flex items-start gap-2 p-3 bg-amber-50 border border-amber-200 rounded-xl text-[11px] text-amber-800">
-                  <AlertCircle className="w-3.5 h-3.5 shrink-0 mt-0.5 text-amber-600" />
-                  <span>Guest templates are stored locally. Sign in to sync across devices.</span>
-                </div>
-              )}
             </>
           )}
 

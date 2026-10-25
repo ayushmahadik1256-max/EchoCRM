@@ -31,6 +31,10 @@ import {
   Send,
   Eye,
   EyeOff,
+  Loader2,
+  CalendarPlus,
+  CheckCircle2,
+  Link2,
 } from 'lucide-react';
 import {
   DebriefResult,
@@ -41,6 +45,7 @@ import {
 } from '../types';
 import { EditableChipList } from '../components/EditableChipList';
 import { downloadTaskIcs, buildGoogleCalendarUrl, buildOutlookCalendarUrl } from '../services/ics';
+import { createGoogleCalendarEvent } from '../services/calendarSync';
 import { buildGmailWebUrl, buildOutlookWebMailUrl, buildMailtoUrl } from '../services/emailDispatch';
 import { voicePlayer, generateVoiceDebriefScript } from '../services/voiceDebrief';
 import { formatSlackHandoff, formatMarkdownHandoff } from '../services/handoffExport';
@@ -180,8 +185,16 @@ export const ResultsScreen: React.FC<ResultsScreenProps> = ({
   // Saving state
   const [isSaving, setIsSaving] = useState(false);
   const [savedSuccess, setSavedSuccess] = useState(false);
+  const [saveError, setSaveError] = useState<string | null>(null);
 
-  const { appendUserSignature, openProfileModal, emailSignature } = useAuth();
+  // Google Calendar direct sync state
+  const [calendarSyncState, setCalendarSyncState] = useState<
+    'idle' | 'syncing' | 'synced' | 'error'
+  >('idle');
+  const [calendarSyncError, setCalendarSyncError] = useState<string | null>(null);
+  const [calendarEventLink, setCalendarEventLink] = useState<string | null>(null);
+
+  const { appendUserSignature, openProfileModal, emailSignature, user } = useAuth();
 
   // Handle tone change
   const handleToneChange = async (tone: EmailTone) => {
@@ -340,16 +353,47 @@ export const ResultsScreen: React.FC<ResultsScreenProps> = ({
     );
   };
 
+  // Push the task straight into Google Calendar via the Calendar API
+  const handleSyncToGoogleCalendar = async () => {
+    if (calendarSyncState === 'syncing') return;
+
+    setCalendarSyncError(null);
+    setCalendarSyncState('syncing');
+
+    try {
+      const event = await createGoogleCalendarEvent(
+        {
+          title: taskTitle,
+          owner: taskOwner,
+          dueDate: taskDueDate,
+          priority: taskPriority,
+          rationale: taskRationale,
+        },
+        clientName,
+        company,
+      );
+      setCalendarEventLink(event.htmlLink);
+      setCalendarSyncState('synced');
+    } catch (err: any) {
+      console.error('Google Calendar sync failed:', err);
+      setCalendarSyncError(
+        err?.message || 'Could not add this task to Google Calendar. Please try again.',
+      );
+      setCalendarSyncState('error');
+    }
+  };
+
   // Save Debrief Document
   const handleSaveDebrief = async () => {
     setIsSaving(true);
+    setSaveError(null);
     try {
       const now = new Date().toISOString();
       const docId = existingId || `debrief-${Date.now()}`;
 
       const docToSave: DebriefDocument = {
         id: docId,
-        userId: 'guest',
+        userId: user?.uid || 'guest',
         createdAt: now,
         updatedAt: now,
         status: 'Open',
@@ -389,6 +433,9 @@ export const ResultsScreen: React.FC<ResultsScreenProps> = ({
       setTimeout(() => setSavedSuccess(false), 2500);
     } catch (err) {
       console.error('Error saving debrief:', err);
+      setSaveError(
+        'Could not save this debrief to Firebase. Check your connection and Firestore rules, then try again.',
+      );
     } finally {
       setIsSaving(false);
     }
@@ -1245,12 +1292,40 @@ export const ResultsScreen: React.FC<ResultsScreenProps> = ({
                 Calendar Task & Follow-up Commitment
               </h3>
               <p className="text-xs text-[#5B6B7F] mt-0.5">
-                Add directly to your calendar — no OAuth required. Or download a universal .ics file.
+                Sync straight into your Google Calendar, open a pre-filled event, or download a universal .ics file.
               </p>
             </div>
 
-            {/* 3-button Calendar Export Group */}
+            {/* Calendar export group: direct sync + deep links + file export */}
             <div className="flex flex-wrap gap-2 self-start sm:self-auto">
+              <button
+                type="button"
+                onClick={handleSyncToGoogleCalendar}
+                disabled={calendarSyncState === 'syncing'}
+                className={`inline-flex items-center gap-2 px-3.5 py-2 text-xs font-bold rounded-xl shadow-[0_2px_8px_rgba(26,115,217,0.3)] transition-all ${
+                  calendarSyncState === 'syncing'
+                    ? 'bg-[#1A73D9]/70 text-white cursor-wait'
+                    : calendarSyncState === 'synced'
+                    ? 'bg-emerald-600 hover:bg-emerald-700 text-white cursor-pointer'
+                    : 'bg-[#1A73D9] hover:bg-[#155FB5] text-white cursor-pointer'
+                }`}
+                title="Creates the event directly in your primary Google Calendar (asks for calendar permission once)"
+              >
+                {calendarSyncState === 'syncing' ? (
+                  <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                ) : calendarSyncState === 'synced' ? (
+                  <CheckCircle2 className="w-3.5 h-3.5" />
+                ) : (
+                  <CalendarPlus className="w-3.5 h-3.5" />
+                )}
+                <span>
+                  {calendarSyncState === 'syncing'
+                    ? 'Syncing…'
+                    : calendarSyncState === 'synced'
+                    ? 'Synced'
+                    : 'Sync to Google'}
+                </span>
+              </button>
               <a
                 href={buildGoogleCalendarUrl(
                   { title: taskTitle, owner: taskOwner, dueDate: taskDueDate, priority: taskPriority, rationale: taskRationale },
@@ -1259,10 +1334,10 @@ export const ResultsScreen: React.FC<ResultsScreenProps> = ({
                 )}
                 target="_blank"
                 rel="noopener noreferrer"
-                className="inline-flex items-center gap-2 px-3.5 py-2 text-xs font-bold text-white bg-[#1A73D9] hover:bg-[#155FB5] rounded-xl shadow-[0_2px_8px_rgba(26,115,217,0.3)] transition-all cursor-pointer"
-                title="Opens Google Calendar in a new tab — no sign-in required"
+                className="inline-flex items-center gap-2 px-3.5 py-2 text-xs font-bold text-[#0F172A] bg-white border border-[#CFE6FF] hover:bg-[#F3F9FF] rounded-xl shadow-2xs transition-all cursor-pointer"
+                title="Opens a pre-filled Google Calendar event in a new tab — no sign-in required"
               >
-                <Calendar className="w-3.5 h-3.5" />
+                <Calendar className="w-3.5 h-3.5 text-[#1A73D9]" />
                 <span>Google Cal</span>
               </a>
               <a
@@ -1290,6 +1365,63 @@ export const ResultsScreen: React.FC<ResultsScreenProps> = ({
               </button>
             </div>
           </div>
+
+          {/* Google Calendar sync feedback */}
+          {calendarSyncState === 'synced' && (
+            <div className="rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-xs text-emerald-900 flex items-start gap-2.5 animate-fadeIn">
+              <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0 mt-0.5" />
+              <div className="flex-1">
+                <p className="font-bold">Added to your primary Google Calendar</p>
+                <p className="text-emerald-800 mt-0.5">
+                  “{taskTitle}” is scheduled for {new Date(`${taskDueDate}T00:00:00`).toLocaleDateString(undefined, {
+                    weekday: 'short',
+                    month: 'short',
+                    day: 'numeric',
+                    year: 'numeric',
+                  })}{' '}
+                  with a reminder an hour before.
+                </p>
+                {calendarEventLink && (
+                  <a
+                    href={calendarEventLink}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="inline-flex items-center gap-1 mt-1.5 font-bold text-emerald-700 hover:text-emerald-900 underline"
+                  >
+                    <Link2 className="w-3 h-3" />
+                    <span>Open the event in Google Calendar</span>
+                  </a>
+                )}
+              </div>
+              <button
+                type="button"
+                onClick={handleSyncToGoogleCalendar}
+                className="text-[11px] font-semibold text-emerald-700 hover:text-emerald-900 underline shrink-0 cursor-pointer"
+              >
+                Sync again
+              </button>
+            </div>
+          )}
+
+          {calendarSyncState === 'error' && calendarSyncError && (
+            <div role="alert" className="rounded-2xl border border-rose-200 bg-rose-50 px-4 py-3 text-xs text-rose-900 flex items-start gap-2.5 animate-fadeIn">
+              <AlertTriangle className="w-4 h-4 text-rose-600 shrink-0 mt-0.5" />
+              <div className="flex-1">
+                <p className="font-bold">Google Calendar sync failed</p>
+                <p className="text-rose-800 mt-0.5">{calendarSyncError}</p>
+                <p className="text-[11px] text-rose-700 mt-1">
+                  You can still use the “Google Cal” prefilled event or the .ics download below.
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={handleSyncToGoogleCalendar}
+                className="text-[11px] font-semibold text-rose-700 hover:text-rose-900 underline shrink-0 cursor-pointer"
+              >
+                Retry
+              </button>
+            </div>
+          )}
 
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div className="space-y-1.5 sm:col-span-2">
@@ -1416,6 +1548,27 @@ export const ResultsScreen: React.FC<ResultsScreenProps> = ({
           </button>
         </div>
       </div>
+
+      {/* Save failure toast */}
+      {saveError && (
+        <div
+          role="alert"
+          className="fixed bottom-24 left-1/2 -translate-x-1/2 z-50 w-[calc(100%-2rem)] max-w-md rounded-2xl border border-rose-200 bg-rose-50 px-4 py-3 text-xs text-rose-900 shadow-xl flex items-start gap-2.5 animate-fadeIn"
+        >
+          <AlertTriangle className="w-4 h-4 text-rose-600 shrink-0 mt-0.5" />
+          <div className="flex-1">
+            <p className="font-bold">Debrief not saved</p>
+            <p className="mt-0.5">{saveError}</p>
+          </div>
+          <button
+            type="button"
+            onClick={() => setSaveError(null)}
+            className="text-[11px] font-semibold underline shrink-0 cursor-pointer"
+          >
+            Dismiss
+          </button>
+        </div>
+      )}
     </div>
   );
 };

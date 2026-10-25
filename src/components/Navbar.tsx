@@ -3,7 +3,6 @@ import {
   Mic,
   History,
   PlusCircle,
-  LogIn,
   LogOut,
   Sliders,
   Sparkles,
@@ -25,7 +24,7 @@ export const Navbar: React.FC<NavbarProps> = ({
   onUseSampleDirectly,
   onInstantJudgeDemo,
 }) => {
-  const { user, isGuest, signIn, signOut, openProfileModal } = useAuth();
+  const { user, signOut, openProfileModal } = useAuth();
   const [isScrolled, setIsScrolled] = useState(false);
 
   useEffect(() => {
@@ -134,17 +133,7 @@ export const Navbar: React.FC<NavbarProps> = ({
               <span className="hidden sm:inline">Settings</span>
             </button>
 
-            {isGuest ? (
-              <button
-                onClick={signIn}
-                className="inline-flex items-center gap-1.5 px-3.5 py-1.5 text-xs font-semibold text-white bg-[#1A73D9] hover:bg-[#155FB5] rounded-xl shadow-[0_2px_10px_rgba(26,115,217,0.3)] hover:shadow-[0_4px_14px_rgba(26,115,217,0.4)] transition-all cursor-pointer min-h-[36px] whitespace-nowrap"
-                title="Sign in with Google to sync to your private cloud database"
-              >
-                <LogIn className="w-3.5 h-3.5" />
-                <span>Sign in with Google</span>
-              </button>
-            ) : (
-              <div className="flex items-center gap-1.5 bg-white/80 border border-white/90 shadow-2xs p-1 rounded-xl">
+            <div className="flex items-center gap-1.5 bg-white/80 border border-white/90 shadow-2xs p-1 rounded-xl">
                 <button
                   type="button"
                   onClick={openProfileModal}
@@ -164,8 +153,7 @@ export const Navbar: React.FC<NavbarProps> = ({
                 >
                   <LogOut className="w-3.5 h-3.5" />
                 </button>
-              </div>
-            )}
+            </div>
           </div>
         </div>
 

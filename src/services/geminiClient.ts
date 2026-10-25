@@ -143,7 +143,7 @@ export async function transcribeAudioFile(
     throw new Error(
       errorJson.message ||
         (res.status === 413
-          ? 'File is too large. Please upload a recording under 20 MB.'
+          ? 'The server rejected this upload as too large. Maximum audio size is 14 MB — hosted deployments such as Vercel are limited to about 4.5 MB per request.'
           : res.status === 415
           ? 'Unsupported audio format. Try MP3, M4A, WAV, or WebM.'
           : `Transcription failed (${res.status})`),

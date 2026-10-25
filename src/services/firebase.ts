@@ -3,6 +3,7 @@ import {
   getAuth,
   GoogleAuthProvider,
   signInWithPopup,
+  reauthenticateWithPopup,
   signOut as firebaseSignOut,
   onAuthStateChanged,
   User,
@@ -20,9 +21,30 @@ import {
   getDoc,
   getDocFromServer,
 } from 'firebase/firestore';
-import firebaseConfig from '../../firebase-applet-config.json';
 import { DebriefDocument, UserProfile, CallTemplate } from '../types';
 
+import firebaseAppConfig from '../../firebase-applet-config.json';
+
+const firebaseConfig = {
+  apiKey: import.meta.env.VITE_FIREBASE_API_KEY || firebaseAppConfig.apiKey,
+  authDomain: import.meta.env.VITE_FIREBASE_AUTH_DOMAIN || firebaseAppConfig.authDomain,
+  projectId: import.meta.env.VITE_FIREBASE_PROJECT_ID || firebaseAppConfig.projectId,
+  storageBucket: import.meta.env.VITE_FIREBASE_STORAGE_BUCKET || firebaseAppConfig.storageBucket,
+  messagingSenderId:
+    import.meta.env.VITE_FIREBASE_MESSAGING_SENDER_ID || firebaseAppConfig.messagingSenderId,
+  appId: import.meta.env.VITE_FIREBASE_APP_ID || firebaseAppConfig.appId,
+};
+
+const missingFirebaseConfig = Object.entries(firebaseConfig)
+  .filter(([, value]) => !value)
+  .map(([key]) => key);
+
+if (missingFirebaseConfig.length > 0) {
+  throw new Error(
+    `Missing Firebase configuration: ${missingFirebaseConfig.join(', ')}. ` +
+    'Provide values in firebase-applet-config.json or set the corresponding VITE_FIREBASE_* environment variables.',
+  );
+}
 
 export enum OperationType {
   CREATE = 'create',
@@ -69,7 +91,10 @@ export function handleFirestoreError(
 // Initialize Firebase App
 const app = !getApps().length ? initializeApp(firebaseConfig) : getApp();
 export const auth = getAuth(app);
-export const db = getFirestore(app, firebaseConfig.firestoreDatabaseId);
+export const db = getFirestore(
+  app,
+  import.meta.env.VITE_FIREBASE_DATABASE_ID || firebaseAppConfig.firestoreDatabaseId || '(default)',
+);
 
 // Test Firestore connection on boot as mandated by skill
 export async function testConnection(): Promise<boolean> {
@@ -229,3 +254,88 @@ export async function deleteTemplateFromFirestore(templateId: string): Promise<v
   }
 }
 
+// ─── Google Calendar OAuth ────────────────────────────────────────────────────
+
+export const GOOGLE_CALENDAR_SCOPE = 'https://www.googleapis.com/auth/calendar.events';
+
+const CALENDAR_TOKEN_STORAGE_KEY = 'echocrm_google_calendar_token';
+const CALENDAR_TOKEN_LIFETIME_MS = 50 * 60 * 1000; // Google access tokens last ~60 minutes
+
+interface CachedCalendarToken {
+  accessToken: string;
+  expiresAt: number;
+}
+
+let calendarTokenCache: CachedCalendarToken | null = null;
+
+export function readCachedCalendarToken(): CachedCalendarToken | null {
+  if (calendarTokenCache && calendarTokenCache.expiresAt > Date.now() + 30_000) {
+    return calendarTokenCache;
+  }
+  try {
+    const raw = sessionStorage.getItem(CALENDAR_TOKEN_STORAGE_KEY);
+    if (!raw) return null;
+    const parsed = JSON.parse(raw) as CachedCalendarToken;
+    if (!parsed?.accessToken || parsed.expiresAt <= Date.now() + 30_000) {
+      sessionStorage.removeItem(CALENDAR_TOKEN_STORAGE_KEY);
+      return null;
+    }
+    calendarTokenCache = parsed;
+    return parsed;
+  } catch {
+    return null;
+  }
+}
+
+export function hasGoogleCalendarToken(): boolean {
+  return readCachedCalendarToken() !== null;
+}
+
+export function clearGoogleCalendarToken(): void {
+  calendarTokenCache = null;
+  try {
+    sessionStorage.removeItem(CALENDAR_TOKEN_STORAGE_KEY);
+  } catch {
+    // Ignore storage restrictions (private mode, etc.)
+  }
+}
+
+/**
+ * Obtains an OAuth access token carrying the calendar.events scope.
+ * Signed-in users are re-authenticated silently-ish via a popup; guests are
+ * signed in through the same flow so they can push the event too.
+ */
+export async function requestGoogleCalendarToken(): Promise<string> {
+  const cached = readCachedCalendarToken();
+  if (cached) return cached.accessToken;
+
+  const provider = new GoogleAuthProvider();
+  provider.addScope(GOOGLE_CALENDAR_SCOPE);
+  provider.setCustomParameters({ prompt: 'consent' });
+
+  const result = auth.currentUser
+    ? await reauthenticateWithPopup(auth.currentUser, provider)
+    : await signInWithPopup(auth, provider);
+
+  const credential = GoogleAuthProvider.credentialFromResult(result);
+  const accessToken = credential?.accessToken;
+
+  if (!accessToken) {
+    throw new Error(
+      'Google did not return a calendar access token. Please approve calendar access and try again.',
+    );
+  }
+
+  const stored: CachedCalendarToken = {
+    accessToken,
+    expiresAt: Date.now() + CALENDAR_TOKEN_LIFETIME_MS,
+  };
+  calendarTokenCache = stored;
+  try {
+    sessionStorage.setItem(CALENDAR_TOKEN_STORAGE_KEY, JSON.stringify(stored));
+  } catch {
+    // Token still usable in memory for this session.
+  }
+
+  return accessToken;
+}

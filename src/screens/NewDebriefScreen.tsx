@@ -34,7 +34,6 @@ import { ArtifactTimeline } from '../components/visuals/ArtifactTimeline';
 import { AudioUploadPanel } from '../components/AudioUploadPanel';
 import { TemplateManagerModal } from '../components/TemplateManagerModal';
 import { fetchUserTemplates } from '../services/firebase';
-import { getGuestTemplates } from '../services/localStore';
 
 interface NewDebriefScreenProps {
   initialTranscript?: string;
@@ -66,7 +65,7 @@ export const NewDebriefScreen: React.FC<NewDebriefScreenProps> = ({
   initialMetadata = {},
   onGenerateSuccess,
 }) => {
-  const { userProfile, emailSignature, user, isGuest } = useAuth();
+  const { userProfile, emailSignature, user } = useAuth();
 
   const [transcript, setTranscript] = useState(initialTranscript);
   const [clientName, setClientName] = useState(initialMetadata.clientName || '');
@@ -124,12 +123,11 @@ export const NewDebriefScreen: React.FC<NewDebriefScreenProps> = ({
     let cancelled = false;
     async function load() {
       try {
-        const tpls = user
-          ? await fetchUserTemplates(user.uid)
-          : getGuestTemplates();
+        if (!user) return;
+        const tpls = await fetchUserTemplates(user.uid);
         if (!cancelled) setUserTemplates(tpls);
-      } catch {
-        // silent — system templates still work
+      } catch (error) {
+        console.error('Failed to load custom templates:', error);
       }
     }
     load();

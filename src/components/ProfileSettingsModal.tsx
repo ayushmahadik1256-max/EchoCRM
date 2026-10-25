@@ -8,30 +8,21 @@ import {
   Building,
   Briefcase,
   Cloud,
-  HardDrive,
   Phone,
   Globe,
   Linkedin,
   Sliders,
   Download,
-  Trash2,
   RotateCcw,
-  LogIn,
   LogOut,
-  HelpCircle,
   AlertTriangle,
-  FileText,
 } from 'lucide-react';
 import { useAuth } from '../hooks/useAuth';
-import {
-  DEFAULT_EMAIL_SIGNATURE,
-  clearGuestDebriefs,
-} from '../services/localStore';
+import { deleteDebriefFromFirestore } from '../services/firebase';
 import {
   DealStage,
   EmailTone,
   TaskPriority,
-  UserProfile,
   DebriefDocument,
 } from '../types';
 import { GlassCard } from './GlassCard';
@@ -68,11 +59,7 @@ export const ProfileSettingsModal: React.FC<ProfileSettingsModalProps> = ({
     userProfile,
     updateUserProfile,
     user,
-    isGuest,
-    signIn,
     signOut,
-    guestCount,
-    importGuestDebriefsToFirestore,
   } = useAuth();
 
   const [activeTab, setActiveTab] = useState<SettingsTab>('profile');
@@ -84,7 +71,7 @@ export const ProfileSettingsModal: React.FC<ProfileSettingsModalProps> = ({
   const [phone, setPhone] = useState(userProfile.phone || '');
   const [website, setWebsite] = useState(userProfile.website || '');
   const [linkedInUrl, setLinkedInUrl] = useState(userProfile.linkedInUrl || '');
-  const [signature, setSignature] = useState(userProfile.emailSignature || DEFAULT_EMAIL_SIGNATURE);
+  const [signature, setSignature] = useState(userProfile.emailSignature || 'Best regards,');
   const [appendSignature, setAppendSignature] = useState(userProfile.appendSignature !== false);
 
   // Preference states
@@ -97,8 +84,7 @@ export const ProfileSettingsModal: React.FC<ProfileSettingsModalProps> = ({
   const [isSaving, setIsSaving] = useState(false);
   const [showSavedNotification, setShowSavedNotification] = useState(false);
   const [confirmClearData, setConfirmClearData] = useState(false);
-  const [isSyncing, setIsSyncing] = useState(false);
-  const [syncCount, setSyncCount] = useState<number | null>(null);
+  const [dataError, setDataError] = useState<string | null>(null);
 
   useEffect(() => {
     if (isProfileModalOpen) {
@@ -108,7 +94,7 @@ export const ProfileSettingsModal: React.FC<ProfileSettingsModalProps> = ({
       setPhone(userProfile.phone || '');
       setWebsite(userProfile.website || '');
       setLinkedInUrl(userProfile.linkedInUrl || '');
-      setSignature(userProfile.emailSignature || DEFAULT_EMAIL_SIGNATURE);
+      setSignature(userProfile.emailSignature || 'Best regards,');
       setAppendSignature(userProfile.appendSignature !== false);
       setDefaultTone(userProfile.defaultTone || 'Professional');
       setDefaultDealStage(userProfile.defaultDealStage || 'Discovery');
@@ -116,7 +102,7 @@ export const ProfileSettingsModal: React.FC<ProfileSettingsModalProps> = ({
       setDefaultTaskPriority(userProfile.defaultTaskPriority || 'Medium');
       setShowSavedNotification(false);
       setConfirmClearData(false);
-      setSyncCount(null);
+      setDataError(null);
     }
   }, [isProfileModalOpen, userProfile]);
 
@@ -224,22 +210,16 @@ export const ProfileSettingsModal: React.FC<ProfileSettingsModalProps> = ({
     URL.revokeObjectURL(url);
   };
 
-  const handleClearLocalData = () => {
-    clearGuestDebriefs();
-    setConfirmClearData(false);
-    if (onDataCleared) onDataCleared();
-  };
-
-  const handleSyncToCloud = async () => {
-    setIsSyncing(true);
+  const handleClearData = async () => {
+    if (!user) return;
+    setDataError(null);
     try {
-      const imported = await importGuestDebriefsToFirestore();
-      setSyncCount(imported);
-      if (onDataCleared) onDataCleared();
+      await Promise.all(allDebriefs.map((debrief) => deleteDebriefFromFirestore(debrief.id)));
+      setConfirmClearData(false);
+      onDataCleared?.();
     } catch (err) {
-      console.error('Failed to sync to cloud:', err);
-    } finally {
-      setIsSyncing(false);
+      console.error('Failed to clear debriefs from Firestore:', err);
+      setDataError('Could not delete all debriefs from Firebase. Please try again.');
     }
   };
 
@@ -358,7 +338,7 @@ export const ProfileSettingsModal: React.FC<ProfileSettingsModalProps> = ({
                   </p>
                 </div>
                 <span className="text-[11px] px-2.5 py-1 rounded-full bg-white border border-[#CFE6FF] text-[#1A73D9] font-bold font-mono">
-                  {isGuest ? 'Local Profile' : 'Cloud Synced'}
+                  Cloud Synced
                 </span>
               </div>
 
@@ -630,7 +610,7 @@ export const ProfileSettingsModal: React.FC<ProfileSettingsModalProps> = ({
                   Data Portability & Management
                 </h4>
                 <p className="text-xs text-[#5B6B7F]">
-                  Export your client debriefs for backups or CRM imports, reset local test records, or replay the app walkthrough.
+                  Export or permanently delete your Firebase debriefs, or replay the app walkthrough.
                 </p>
               </div>
 
@@ -693,16 +673,16 @@ export const ProfileSettingsModal: React.FC<ProfileSettingsModalProps> = ({
                 </button>
               </div>
 
-              {/* Clear Local Data (Destructive) */}
+              {/* Clear Firestore Data (Destructive) */}
               <div className="p-4 bg-rose-50/60 border border-rose-200 rounded-2xl space-y-2">
                 <div className="flex items-center justify-between">
                   <div>
                     <span className="text-xs font-bold text-rose-900 block flex items-center gap-1">
                       <AlertTriangle className="w-3.5 h-3.5 text-rose-600" />
-                      <span>Clear Local Browser Storage</span>
+                      <span>Delete All Firebase Debriefs</span>
                     </span>
                     <span className="text-[11px] text-rose-700">
-                      Removes all guest debriefs from this browser. This cannot be undone.
+                      Permanently deletes all {allDebriefs.length} debriefs from your Firebase account.
                     </span>
                   </div>
 
@@ -710,15 +690,16 @@ export const ProfileSettingsModal: React.FC<ProfileSettingsModalProps> = ({
                     <button
                       type="button"
                       onClick={() => setConfirmClearData(true)}
+                      disabled={allDebriefs.length === 0}
                       className="px-3.5 py-1.5 text-xs font-bold text-rose-700 bg-white border border-rose-300 rounded-xl hover:bg-rose-100 transition-colors cursor-pointer"
                     >
-                      Clear Data
+                      Delete Data
                     </button>
                   ) : (
                     <div className="flex items-center gap-2">
                       <button
                         type="button"
-                        onClick={handleClearLocalData}
+                        onClick={handleClearData}
                         className="px-3.5 py-1.5 text-xs font-bold text-white bg-rose-600 rounded-xl hover:bg-rose-700 transition-colors cursor-pointer"
                       >
                         Yes, Confirm Delete
@@ -733,6 +714,7 @@ export const ProfileSettingsModal: React.FC<ProfileSettingsModalProps> = ({
                     </div>
                   )}
                 </div>
+                {dataError && <p role="alert" className="text-xs text-rose-700">{dataError}</p>}
               </div>
             </div>
           )}
@@ -742,10 +724,10 @@ export const ProfileSettingsModal: React.FC<ProfileSettingsModalProps> = ({
             <div className="space-y-5">
               <div>
                 <h4 className="text-xs font-bold uppercase tracking-wider text-[#0F172A] mb-1">
-                  Account Authentication & Cloud Sync
+                  Firebase Account
                 </h4>
                 <p className="text-xs text-[#5B6B7F]">
-                  Sign in with Google to isolate debriefs per-user in Cloud Firestore.
+                  Your account data is stored in Cloud Firestore and scoped to your Google account.
                 </p>
               </div>
 
@@ -753,76 +735,28 @@ export const ProfileSettingsModal: React.FC<ProfileSettingsModalProps> = ({
               <div className="p-4 bg-[#F3F9FF] border border-[#CFE6FF] rounded-2xl space-y-3">
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-2.5">
-                    {isGuest ? (
-                      <div className="w-9 h-9 rounded-xl bg-white border border-[#CFE6FF] flex items-center justify-center text-[#5B6B7F]">
-                        <HardDrive className="w-4 h-4" />
-                      </div>
-                    ) : (
-                      <div className="w-9 h-9 rounded-xl bg-emerald-100 flex items-center justify-center text-emerald-600">
-                        <Cloud className="w-4 h-4" />
-                      </div>
-                    )}
+                    <div className="w-9 h-9 rounded-xl bg-emerald-100 flex items-center justify-center text-emerald-600">
+                      <Cloud className="w-4 h-4" />
+                    </div>
                     <div>
                       <span className="text-xs font-bold text-[#0F172A] block">
-                        {isGuest ? 'Guest / Demo Mode Active' : 'Connected to Cloud Firestore'}
+                        Connected to Cloud Firestore
                       </span>
                       <span className="text-[11px] text-[#5B6B7F]">
-                        {isGuest
-                          ? 'Debriefs persist locally in browser storage'
-                          : `Authenticated as ${user?.email}`}
+                        Authenticated as {user?.email}
                       </span>
                     </div>
                   </div>
 
-                  {isGuest ? (
-                    <button
-                      type="button"
-                      onClick={signIn}
-                      className="inline-flex items-center gap-1.5 px-3.5 py-2 text-xs font-bold text-white bg-[#1A73D9] rounded-xl hover:bg-[#155FB5] transition-all shadow-2xs cursor-pointer"
-                    >
-                      <LogIn className="w-3.5 h-3.5" />
-                      <span>Sign In with Google</span>
-                    </button>
-                  ) : (
-                    <button
-                      type="button"
-                      onClick={signOut}
-                      className="inline-flex items-center gap-1.5 px-3.5 py-2 text-xs font-semibold text-[#0F172A] bg-white border border-[#CFE6FF] rounded-xl hover:bg-[#F3F9FF] transition-all cursor-pointer"
-                    >
-                      <LogOut className="w-3.5 h-3.5" />
-                      <span>Sign Out</span>
-                    </button>
-                  )}
+                  <button
+                    type="button"
+                    onClick={signOut}
+                    className="inline-flex items-center gap-1.5 px-3.5 py-2 text-xs font-semibold text-[#0F172A] bg-white border border-[#CFE6FF] rounded-xl hover:bg-[#F3F9FF] transition-all cursor-pointer"
+                  >
+                    <LogOut className="w-3.5 h-3.5" />
+                    <span>Sign Out</span>
+                  </button>
                 </div>
-
-                {/* Cloud Import Section if guest records exist */}
-                {!isGuest && guestCount > 0 && (
-                  <div className="mt-3 pt-3 border-t border-[#CFE6FF] flex items-center justify-between">
-                    <div>
-                      <span className="text-xs font-bold text-[#0F172A] block">
-                        Import Guest Records
-                      </span>
-                      <span className="text-[11px] text-[#5B6B7F]">
-                        Found {guestCount} unsynced debriefs from local guest session.
-                      </span>
-                    </div>
-                    <button
-                      type="button"
-                      onClick={handleSyncToCloud}
-                      disabled={isSyncing}
-                      className="px-3.5 py-1.5 text-xs font-bold text-[#1A73D9] bg-white border border-[#CFE6FF] rounded-xl hover:bg-[#E4F1FF] transition-all cursor-pointer"
-                    >
-                      {isSyncing ? 'Syncing…' : 'Sync to Cloud Now'}
-                    </button>
-                  </div>
-                )}
-
-                {syncCount !== null && (
-                  <div className="p-2.5 bg-emerald-50 border border-emerald-200 rounded-xl text-xs text-emerald-800 flex items-center gap-2">
-                    <Check className="w-3.5 h-3.5 text-emerald-600" />
-                    <span>Successfully synced {syncCount} debriefs to your Cloud Firestore account.</span>
-                  </div>
-                )}
               </div>
             </div>
           )}

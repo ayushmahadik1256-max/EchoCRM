@@ -19,7 +19,7 @@ service cloud.firestore {
         && data.id is string && data.id.size() <= 128
         && data.clientName is string && data.clientName.size() <= 200
         && data.status in ['Open', 'Done']
-        && data.rawTranscript is string && data.rawTranscript.size() <= 20000
+        && data.rawTranscript is string && data.rawTranscript.size() <= 100000
         && data.emailSubject is string && data.emailSubject.size() <= 300
         && data.emailBody is string && data.emailBody.size() <= 10000;
     }

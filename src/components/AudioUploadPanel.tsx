@@ -13,7 +13,7 @@ interface AudioUploadPanelProps {
 
 const ACCEPTED_TYPES = ['audio/mpeg', 'audio/mp4', 'audio/wav', 'audio/ogg', 'audio/webm', 'audio/x-m4a', 'audio/aac', 'audio/flac', 'video/webm', 'video/mp4'];
 const ACCEPT_ATTR = '.mp3,.mp4,.m4a,.wav,.ogg,.webm,.aac,.flac';
-const MAX_MB = 20;
+const MAX_MB = 14;
 
 function formatBytes(bytes: number): string {
   if (bytes < 1024) return `${bytes} B`;
