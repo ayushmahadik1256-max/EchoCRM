@@ -27,7 +27,7 @@ import {
   updateDebriefInFirestore,
   deleteDebriefFromFirestore,
 } from './services/firebase';
-import { SAMPLE_DICTATED_NOTE, SAMPLE_METADATA, PREGENERATED_SAMPLE_RESULT } from './data/sampleNotes';
+import { SAMPLE_DICTATED_NOTE, SAMPLE_METADATA } from './data/sampleNotes';
 import { PageTransition } from './components/PageTransition';
 
 type ViewMode = 'landing' | 'new' | 'history' | 'results';
@@ -410,7 +410,6 @@ function MainApp() {
         }}
         onRequestSignIn={() => promptSignIn(null)}
         onUseSampleDirectly={handleTrySampleCall}
-        onInstantJudgeDemo={handleInstantJudgeDemo}
       />
 
       {/* Main Screen Body */}

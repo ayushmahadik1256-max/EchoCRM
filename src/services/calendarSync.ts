@@ -1,4 +1,4 @@
-import { NextStepTask } from '../types';
+﻿import { NextStepTask } from '../types';
 import {
   clearGoogleCalendarToken,
   requestGoogleCalendarToken,
@@ -60,7 +60,6 @@ export async function createGoogleCalendarEvent(
   try {
     token = await requestGoogleCalendarToken();
   } catch (error: any) {
-    // Popup closed / blocked / consent denied all land here.
     const code = String(error?.code || '');
     if (code === 'auth/popup-closed-by-user' || code === 'auth/cancelled-popup-request') {
       throw new CalendarSyncError('Calendar connection cancelled before it finished.', 'AUTH');

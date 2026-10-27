@@ -30,12 +30,12 @@ export const AmbientBackground: React.FC = () => {
         }}
       />
 
-      {/* Faint grey grid across the full background canvas */}
       <div
-        className="absolute inset-0 bg-faint-grid"
+        className="absolute inset-0 opacity-[0.22] [mask-image:radial-gradient(ellipse_60%_50%_at_50%_30%,#000_70%,transparent_100%)]"
         style={{
-          maskImage: 'radial-gradient(ellipse 90% 80% at 50% 30%, #000 70%, rgba(0,0,0,0.4) 100%)',
-          WebkitMaskImage: 'radial-gradient(ellipse 90% 80% at 50% 30%, #000 70%, rgba(0,0,0,0.4) 100%)',
+          backgroundImage:
+            'linear-gradient(rgba(26,115,217,0.06) 1px, transparent 1px), linear-gradient(90deg, rgba(26,115,217,0.06) 1px, transparent 1px)',
+          backgroundSize: '48px 48px',
         }}
       />
 
