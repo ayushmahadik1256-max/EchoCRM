@@ -46,7 +46,7 @@ export interface DebriefResult {
 
 export interface DebriefDocument extends DebriefResult {
   id: string;
-  userId: string; // 'guest' or Firebase Auth UID
+  userId: string; // Local browser profile identifier
   createdAt: string; // ISO
   updatedAt: string; // ISO
   status: DebriefStatus;
@@ -113,7 +113,7 @@ export interface UserProfile {
 /** Represents a call template — either a built-in system template or a user-created custom one */
 export interface CallTemplate {
   id: string;
-  /** Firebase UID for user-created templates, 'system' for built-ins */
+  /** Local profile identifier for user-created templates, 'system' for built-ins */
   userId: string;
   name: string;
   description: string;
@@ -121,10 +121,9 @@ export interface CallTemplate {
   preferredTone: EmailTone;
   suggestedPrompts: string[];
   placeholderHint: string;
-  /** true for user-created templates stored in Firestore */
+  /** true for user-created templates stored in this browser */
   isCustom?: boolean;
   createdAt?: string;
   updatedAt?: string;
 }
-
 

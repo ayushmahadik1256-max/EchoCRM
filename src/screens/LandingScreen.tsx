@@ -89,7 +89,7 @@ export const LandingScreen: React.FC<LandingScreenProps> = ({
 
             <p className="flex items-center gap-1.5 text-[11px] text-[#5B6B7F]">
               <ShieldCheck className="w-3.5 h-3.5 text-[#1A73D9]" />
-              <span>Free to explore — sign in only when you want to save a debrief.</span>
+              <span>Free to use — no account required.</span>
             </p>
 
             {/* Quick trust metrics */}
@@ -522,7 +522,7 @@ export const LandingScreen: React.FC<LandingScreenProps> = ({
                   </div>
                   <div className="mt-5 pt-3 border-t border-[#E4F1FF] text-[11px] text-emerald-700 font-semibold flex items-center gap-1.5">
                     <Check className="w-3.5 h-3.5 text-emerald-600" />
-                    <span>Firestore + local sync</span>
+                    <span>Private local storage</span>
                   </div>
                 </GlassCard>
               </TiltCard>

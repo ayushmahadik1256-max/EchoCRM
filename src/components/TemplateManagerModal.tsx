@@ -12,12 +12,12 @@ import {
 } from 'lucide-react';
 import { CallTemplate, DealStage, EmailTone } from '../types';
 import { CALL_TEMPLATES } from '../data/templates';
-import { useAuth } from '../hooks/useAuth';
+import { useProfile } from '../hooks/useProfile';
 import {
-  fetchUserTemplates,
-  saveTemplateToFirestore,
-  deleteTemplateFromFirestore,
-} from '../services/firebase';
+  fetchTemplates,
+  saveTemplate,
+  deleteTemplate,
+} from '../services/localStorage';
 import { GlassCard } from './GlassCard';
 
 const DEAL_STAGES: DealStage[] = [
@@ -58,7 +58,7 @@ export const TemplateManagerModal: React.FC<TemplateManagerModalProps> = ({
   onClose,
   onTemplatesChanged,
 }) => {
-  const { user } = useAuth();
+  const { localUser } = useProfile();
   const [activeTab, setActiveTab] = useState<Tab>('my');
   const [userTemplates, setUserTemplates] = useState<CallTemplate[]>([]);
   const [loading, setLoading] = useState(false);
@@ -76,16 +76,15 @@ export const TemplateManagerModal: React.FC<TemplateManagerModalProps> = ({
     setLoading(true);
     setActionError(null);
     try {
-      if (!user) throw new Error('Sign in is required to load custom templates.');
-      const tpls = await fetchUserTemplates(user.uid);
+      const tpls = await fetchTemplates();
       setUserTemplates(tpls);
     } catch (err) {
       console.error('Failed to load templates:', err);
-      setActionError('Could not load your templates from Firebase. Check your connection and Firestore rules.');
+      setActionError('Could not load templates saved in this browser.');
     } finally {
       setLoading(false);
     }
-  }, [user]);
+  }, [localUser]);
 
   useEffect(() => {
     if (isOpen) {
@@ -120,7 +119,6 @@ export const TemplateManagerModal: React.FC<TemplateManagerModalProps> = ({
 
   const handleSave = async () => {
     if (!form.name.trim()) return;
-    if (!user) throw new Error('Sign in is required to save custom templates.');
     setIsSaving(true);
     setActionError(null);
 
@@ -128,7 +126,7 @@ export const TemplateManagerModal: React.FC<TemplateManagerModalProps> = ({
     const id = editingId || `tpl-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
     const template: CallTemplate = {
       id,
-      userId: user.uid,
+      userId: localUser.uid,
       name: form.name.trim(),
       description: form.description.trim(),
       dealStage: form.dealStage,
@@ -141,20 +139,20 @@ export const TemplateManagerModal: React.FC<TemplateManagerModalProps> = ({
     };
 
     try {
-      await saveTemplateToFirestore(template);
+      await saveTemplate(template);
 
       setSavedId(id);
       setTimeout(() => setSavedId(null), 2000);
 
       await loadTemplates();
-      onTemplatesChanged(await fetchUserTemplates(user.uid));
+      onTemplatesChanged(await fetchTemplates());
 
       setShowForm(false);
       setEditingId(null);
       setForm(EMPTY_FORM);
     } catch (err) {
       console.error('Failed to save template:', err);
-      setActionError('Could not save this template to Firebase. Please try again.');
+      setActionError('Could not save this template in this browser.');
     } finally {
       setIsSaving(false);
     }
@@ -162,11 +160,10 @@ export const TemplateManagerModal: React.FC<TemplateManagerModalProps> = ({
 
   const handleDelete = async (tplId: string) => {
     try {
-      if (!user) throw new Error('Sign in is required to delete custom templates.');
       setActionError(null);
-      await deleteTemplateFromFirestore(tplId);
+      await deleteTemplate(tplId);
       await loadTemplates();
-      onTemplatesChanged(await fetchUserTemplates(user.uid));
+      onTemplatesChanged(await fetchTemplates());
       setDeleteConfirmId(null);
     } catch (err) {
       console.error('Failed to delete template:', err);

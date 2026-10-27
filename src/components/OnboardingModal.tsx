@@ -65,7 +65,7 @@ const STEPS: StepInfo[] = [
     bulletPoints: [
       'Automatic email signature appended to every client draft',
       'Download standard RFC 5545 .ics calendar task file',
-      'Stores your debriefs and profile securely in Cloud Firestore',
+      'Keeps debriefs and profile settings in this browser',
     ],
     icon: <CalendarCheck className="w-6 h-6 text-[#1A73D9]" />,
   },

@@ -3,13 +3,12 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import React, { useState, useEffect, useCallback, useRef } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { Mic } from 'lucide-react';
-import { AuthProvider, useAuth } from './hooks/useAuth';
+import { ProfileProvider, useProfile } from './hooks/useProfile';
 import { Navbar } from './components/Navbar';
 import { ProfileSettingsModal } from './components/ProfileSettingsModal';
 import { OnboardingModal } from './components/OnboardingModal';
-import { SignInModal } from './components/SignInModal';
 import { AmbientBackground } from './components/AmbientBackground';
 import { LandingScreen } from './screens/LandingScreen';
 import { NewDebriefScreen } from './screens/NewDebriefScreen';
@@ -22,58 +21,22 @@ import {
   DealStage,
 } from './types';
 import {
-  fetchUserDebriefs,
-  saveDebriefToFirestore,
-  updateDebriefInFirestore,
-  deleteDebriefFromFirestore,
-} from './services/firebase';
+  fetchDebriefs,
+  saveDebrief,
+  updateDebrief,
+  deleteDebrief,
+} from './services/localStorage';
 import { SAMPLE_DICTATED_NOTE, SAMPLE_METADATA } from './data/sampleNotes';
 import { PageTransition } from './components/PageTransition';
 
 type ViewMode = 'landing' | 'new' | 'history' | 'results';
 
-type PendingIntent = 'new' | 'sample' | 'demo' | 'history' | 'save';
-
-const DEFAULT_SIGN_IN_REASON =
-  'Sign in with Google to save debriefs to your account and access them on any device.';
-
 function MainApp() {
-  const { user, loading: authLoading, signIn, appendUserSignature } = useAuth();
+  const { appendUserSignature } = useProfile();
 
   const [currentView, setCurrentView] = useState<ViewMode>('landing');
   const [debriefs, setDebriefs] = useState<DebriefDocument[]>([]);
   const [debriefLoadError, setDebriefLoadError] = useState<string | null>(null);
-  const [signInError, setSignInError] = useState<string | null>(null);
-  const [signingIn, setSigningIn] = useState(false);
-
-  // Sign-in is only requested when a visitor tries to use the service. The
-  // intent they chose is remembered and replayed after authentication.
-  const [signInOpen, setSignInOpen] = useState(false);
-  const [signInReason, setSignInReason] = useState(DEFAULT_SIGN_IN_REASON);
-  const pendingIntentRef = useRef<PendingIntent | null>(null);
-  const pendingSaveDocRef = useRef<DebriefDocument | null>(null);
-  const saveCallbacksRef = useRef<{
-    resolve: () => void;
-    reject: (reason?: unknown) => void;
-  } | null>(null);
-  const previousUidRef = useRef<string | null>(null);
-
-  const promptSignIn = (intent: PendingIntent | null, reason?: string) => {
-    pendingIntentRef.current = intent;
-    setSignInReason(reason || DEFAULT_SIGN_IN_REASON);
-    setSignInError(null);
-    setSignInOpen(true);
-  };
-
-  const cancelSignIn = () => {
-    setSignInOpen(false);
-    pendingIntentRef.current = null;
-    pendingSaveDocRef.current = null;
-    if (saveCallbacksRef.current) {
-      saveCallbacksRef.current.reject(new Error('SIGN_IN_CANCELLED'));
-      saveCallbacksRef.current = null;
-    }
-  };
 
   const [showOnboarding, setShowOnboarding] = useState(false);
 
@@ -99,19 +62,15 @@ function MainApp() {
 
   // Load debriefs whenever auth state changes
   const loadDebriefs = useCallback(async () => {
-    if (!user) {
-      setDebriefs([]);
-      return;
-    }
     setDebriefLoadError(null);
     try {
-      const firestoreList = await fetchUserDebriefs(user.uid);
-      setDebriefs(firestoreList);
+      const savedDebriefs = await fetchDebriefs();
+      setDebriefs(savedDebriefs);
     } catch (err) {
       console.error('Failed to load debriefs:', err);
-      setDebriefLoadError('Could not load your debriefs from Firebase. Please try again.');
+      setDebriefLoadError('Could not load saved debriefs from this browser.');
     }
-  }, [user]);
+  }, []);
 
   useEffect(() => {
     loadDebriefs();
@@ -124,11 +83,8 @@ function MainApp() {
     transcript: string,
     usedFallback?: boolean,
   ) => {
-    // Automatically append the signed-in user's email signature (guests have
-    // no profile yet, so their generated email is left untouched).
-    const emailBodyWithSignature = user
-      ? appendUserSignature(result.emailBody)
-      : result.emailBody;
+    // Append the local profile's email signature.
+    const emailBodyWithSignature = appendUserSignature(result.emailBody);
     const finalResult: DebriefResult = {
       ...result,
       emailBody: emailBodyWithSignature,
@@ -142,34 +98,18 @@ function MainApp() {
     setCurrentView('results');
   };
 
-  // Persist a debrief to Firestore (requires an authenticated user).
+  // Save debriefs in this browser so no account or server database is needed.
   const persistDebrief = async (docToSave: DebriefDocument) => {
-    if (!user) throw new Error('Sign in is required to save debriefs.');
     const userDoc: DebriefDocument = {
       ...docToSave,
-      userId: user.uid,
+      userId: 'local',
     };
-    await saveDebriefToFirestore(userDoc);
+    await saveDebrief(userDoc);
     setActiveDebriefId(docToSave.id);
     await loadDebriefs();
   };
 
-  // Saving is the first point where an account is required. Guests keep their
-  // debrief in the current session; clicking Save opens the sign-in prompt and
-  // the same save is completed automatically after authentication.
-  const handleSaveDebrief = (docToSave: DebriefDocument): Promise<void> => {
-    if (!user) {
-      pendingSaveDocRef.current = docToSave;
-      promptSignIn(
-        'save',
-        'Sign in to store this debrief in your account. You can keep using EchoCRM without an account.',
-      );
-      return new Promise<void>((resolve, reject) => {
-        saveCallbacksRef.current = { resolve, reject };
-      });
-    }
-    return persistDebrief(docToSave);
-  };
+  const handleSaveDebrief = (docToSave: DebriefDocument): Promise<void> => persistDebrief(docToSave);
 
   // Toggle Open/Done status directly in History table
   const handleToggleStatus = async (id: string, currentStatus: DebriefStatus) => {
@@ -180,8 +120,7 @@ function MainApp() {
     );
 
     try {
-      if (!user) throw new Error('Sign in is required to update debriefs.');
-      await updateDebriefInFirestore(id, { status: newStatus });
+      await updateDebrief(id, { status: newStatus });
     } catch (err) {
       console.error('Failed to toggle status:', err);
       await loadDebriefs();
@@ -192,8 +131,7 @@ function MainApp() {
   const handleDeleteDebrief = async (id: string) => {
     setDebriefs((prev) => prev.filter((d) => d.id !== id));
     try {
-      if (!user) throw new Error('Sign in is required to delete debriefs.');
-      await deleteDebriefFromFirestore(id);
+      await deleteDebrief(id);
     } catch (err) {
       console.error('Failed to delete debrief:', err);
       await loadDebriefs();
@@ -223,9 +161,6 @@ function MainApp() {
   };
 
   // ── Service entry points ──────────────────────────────────────────────────
-  // Each raw action is also replayed by the post-sign-in effect, so they must
-  // not depend on a possibly stale `user` closure.
-
   const openNewDebrief = () => {
     setPresetTranscript('');
     setPresetMetadata({});
@@ -238,132 +173,14 @@ function MainApp() {
     setCurrentView('new');
   };
 
-  const openInstantDemo = () => {
-    const emailWithSig = user
-      ? appendUserSignature(PREGENERATED_SAMPLE_RESULT.emailBody)
-      : PREGENERATED_SAMPLE_RESULT.emailBody;
-    setActiveResult({
-      ...PREGENERATED_SAMPLE_RESULT,
-      emailBody: emailWithSig,
-    });
-    setActiveMetadata(SAMPLE_METADATA);
-    setActiveTranscript(SAMPLE_DICTATED_NOTE);
-    setActiveDebriefId(undefined);
-    setActiveUsedFallback(true);
-    setCurrentView('results');
-  };
-
   const openHistory = () => setCurrentView('history');
 
-  // Guests can use the full workflow (record, upload, sample, demo, results).
-  // An account is only needed for storage-backed features.
   const handleStartNewDebrief = () => openNewDebrief();
 
   const handleTrySampleCall = () => openSampleDebrief();
 
-  const handleInstantJudgeDemo = () => openInstantDemo();
-
-  const handleViewHistory = () => {
-    if (!user) {
-      promptSignIn('history', 'Sign in to view, search, and manage your saved debriefs.');
-      return;
-    }
-    openHistory();
-  };
-
-  const handleSignIn = async () => {
-    setSigningIn(true);
-    setSignInError(null);
-    try {
-      await signIn();
-    } catch (error: unknown) {
-      console.error('Google Sign-In failed:', error);
-      const code = (error as { code?: string } | null)?.code;
-      if (code === 'auth/popup-closed-by-user' || code === 'auth/cancelled-popup-request') {
-        setSignInError('Sign-in was cancelled. Click “Continue with Google” to try again.');
-      } else if (code === 'auth/unauthorized-domain') {
-        setSignInError(
-          'This domain is not authorized for sign-in. Add it in Firebase Console → Authentication → Settings → Authorized domains.',
-        );
-      } else if (code === 'auth/operation-not-allowed') {
-        setSignInError('Google sign-in is disabled for this project. Enable it in Firebase Console → Authentication.');
-      } else {
-        setSignInError('Google sign-in failed. Please try again.');
-      }
-    } finally {
-      setSigningIn(false);
-    }
-  };
-
-  // After a successful sign-in, close the prompt and replay the action the
-  // visitor originally clicked (start a debrief, open history, etc.). Waiting
-  // for authLoading to finish also ensures the profile/signature is loaded.
-  useEffect(() => {
-    if (authLoading || !user) return;
-    setSignInOpen(false);
-    setSignInError(null);
-    const pendingIntent = pendingIntentRef.current;
-    pendingIntentRef.current = null;
-    if (pendingIntent === 'new') openNewDebrief();
-    else if (pendingIntent === 'sample') openSampleDebrief();
-    else if (pendingIntent === 'demo') openInstantDemo();
-    else if (pendingIntent === 'history') openHistory();
-    else if (pendingIntent === 'save') {
-      const doc = pendingSaveDocRef.current;
-      pendingSaveDocRef.current = null;
-      const callbacks = saveCallbacksRef.current;
-      saveCallbacksRef.current = null;
-      if (!doc) {
-        callbacks?.resolve();
-        return;
-      }
-      persistDebrief(doc)
-        .then(() => callbacks?.resolve())
-        .catch((err) => callbacks?.reject(err));
-    }
-    // open*/persist helpers only call stable state setters or the latest user.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [user, authLoading]);
-
-  // Signing out returns the visitor to the public landing page and clears
-  // any in-progress, account-specific state. A guest's first auth resolution
-  // is not a sign-out, so it must not reset the screen they are using.
-  useEffect(() => {
-    if (authLoading) return;
-    const previousUid = previousUidRef.current;
-    previousUidRef.current = user?.uid ?? null;
-    if (user || !previousUid) return;
-    setCurrentView('landing');
-    setActiveResult(null);
-    setActiveMetadata({});
-    setActiveTranscript('');
-    setActiveDebriefId(undefined);
-    setActiveUsedFallback(false);
-    setPresetTranscript('');
-    setPresetMetadata({});
-    setShowOnboarding(false);
-    pendingIntentRef.current = null;
-    pendingSaveDocRef.current = null;
-    if (saveCallbacksRef.current) {
-      saveCallbacksRef.current.reject(new Error('SIGN_IN_CANCELLED'));
-      saveCallbacksRef.current = null;
-    }
-  }, [user, authLoading]);
-
-  // Guests can work through the whole flow; only account-backed actions
-  // (saving, history, custom templates) require sign-in.
+  const handleViewHistory = () => openHistory();
   const view: ViewMode = currentView;
-
-  if (authLoading) {
-    return (
-      <div className="min-h-screen flex flex-col items-center justify-center gap-3 bg-[#F3F9FF]">
-        <div className="logo-3d w-11 h-11 rounded-2xl bg-gradient-to-tr from-[#1A73D9] to-[#7FB8F2] flex items-center justify-center text-white shadow-[0_4px_14px_rgba(26,115,217,0.4)]">
-          <Mic className="w-5 h-5 stroke-[2.2]" />
-        </div>
-        <p className="text-sm font-semibold text-[#5B6B7F]">Loading EchoCRM…</p>
-      </div>
-    );
-  }
 
   return (
     <div className="min-h-screen flex flex-col bg-transparent text-[#0F172A] relative selection:bg-[#CFE6FF] selection:text-[#0F172A]">
@@ -377,24 +194,12 @@ function MainApp() {
         onTrySample={handleOnboardingTrySample}
       />
 
-      {/* Sign-in prompt shown only when a visitor starts using the service */}
-      <SignInModal
-        isOpen={signInOpen}
-        onClose={cancelSignIn}
-        onSignIn={handleSignIn}
-        signingIn={signingIn}
-        error={signInError}
-        reason={signInReason}
-      />
-
       {/* User Profile & Email Signature Settings Modal */}
-      {user && (
-        <ProfileSettingsModal
-          allDebriefs={debriefs}
-          onReplayTour={() => setShowOnboarding(true)}
-          onDataCleared={loadDebriefs}
-        />
-      )}
+      <ProfileSettingsModal
+        allDebriefs={debriefs}
+        onReplayTour={() => setShowOnboarding(true)}
+        onDataCleared={loadDebriefs}
+      />
 
       {/* Primary 3-zone Navigation */}
       <Navbar
@@ -408,13 +213,12 @@ function MainApp() {
             setCurrentView('landing');
           }
         }}
-        onRequestSignIn={() => promptSignIn(null)}
         onUseSampleDirectly={handleTrySampleCall}
       />
 
       {/* Main Screen Body */}
       <main className="flex-1">
-        {user && debriefLoadError && (
+        {debriefLoadError && (
           <div role="alert" className="mx-auto mt-4 max-w-7xl px-4 text-sm text-rose-700">
             {debriefLoadError}
           </div>
@@ -424,7 +228,6 @@ function MainApp() {
           <LandingScreen
             onStartNew={handleStartNewDebrief}
             onTrySample={handleTrySampleCall}
-            onInstantJudgeDemo={handleInstantJudgeDemo}
             onViewHistory={handleViewHistory}
             onOpenTour={() => setShowOnboarding(true)}
           />
@@ -435,9 +238,6 @@ function MainApp() {
             initialTranscript={presetTranscript}
             initialMetadata={presetMetadata}
             onGenerateSuccess={handleGenerateSuccess}
-            onRequestSignIn={() =>
-              promptSignIn(null, 'Sign in to create and save your own call templates.')
-            }
           />
         )}
 
@@ -497,8 +297,8 @@ function MainApp() {
 
 export default function App() {
   return (
-    <AuthProvider>
+    <ProfileProvider>
       <MainApp />
-    </AuthProvider>
+    </ProfileProvider>
   );
 }

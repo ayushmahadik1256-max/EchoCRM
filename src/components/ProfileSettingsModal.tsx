@@ -7,18 +7,16 @@ import {
   User,
   Building,
   Briefcase,
-  Cloud,
   Phone,
   Globe,
   Linkedin,
   Sliders,
   Download,
   RotateCcw,
-  LogOut,
   AlertTriangle,
 } from 'lucide-react';
-import { useAuth } from '../hooks/useAuth';
-import { deleteDebriefFromFirestore } from '../services/firebase';
+import { useProfile } from '../hooks/useProfile';
+import { clearLocalData } from '../services/localStorage';
 import {
   DealStage,
   EmailTone,
@@ -33,7 +31,7 @@ interface ProfileSettingsModalProps {
   onDataCleared?: () => void;
 }
 
-type SettingsTab = 'profile' | 'preferences' | 'data' | 'account';
+type SettingsTab = 'profile' | 'preferences' | 'data';
 
 const DEAL_STAGES: DealStage[] = [
   'Lead',
@@ -58,9 +56,8 @@ export const ProfileSettingsModal: React.FC<ProfileSettingsModalProps> = ({
     closeProfileModal,
     userProfile,
     updateUserProfile,
-    user,
-    signOut,
-  } = useAuth();
+    localUser,
+  } = useProfile();
 
   const [activeTab, setActiveTab] = useState<SettingsTab>('profile');
 
@@ -138,18 +135,18 @@ export const ProfileSettingsModal: React.FC<ProfileSettingsModalProps> = ({
   };
 
   const handleApplyStandardTemplate = () => {
-    const name = senderName.trim() || user?.displayName || 'Alex Chen';
+    const name = senderName.trim() || localUser.displayName || 'Alex Chen';
     const title = senderTitle.trim() || 'Senior Client Consultant';
     const comp = company.trim() || 'Echo Advisory Group';
     const ph = phone.trim() || '+1 (555) 234-8901';
     const web = website.trim() || 'echoadvisory.example.com';
-    const email = user?.email || 'alex@echoadvisory.com';
+    const email = localUser.email || 'alex@echoadvisory.com';
 
     setSignature(`Best regards,\n${name}\n${title} | ${comp}\nDirect: ${ph} · ${email}\nWeb: ${web}`);
   };
 
   const handleApplyMinimalTemplate = () => {
-    const name = senderName.trim() || user?.displayName || 'Alex Chen';
+    const name = senderName.trim() || localUser.displayName || 'Alex Chen';
     const comp = company.trim() || 'Echo Advisory';
     setSignature(`Best,\n${name} · ${comp}`);
   };
@@ -211,15 +208,14 @@ export const ProfileSettingsModal: React.FC<ProfileSettingsModalProps> = ({
   };
 
   const handleClearData = async () => {
-    if (!user) return;
     setDataError(null);
     try {
-      await Promise.all(allDebriefs.map((debrief) => deleteDebriefFromFirestore(debrief.id)));
+      await clearLocalData();
       setConfirmClearData(false);
       onDataCleared?.();
     } catch (err) {
-      console.error('Failed to clear debriefs from Firestore:', err);
-      setDataError('Could not delete all debriefs from Firebase. Please try again.');
+      console.error('Failed to clear browser data:', err);
+      setDataError('Could not clear data saved in this browser.');
     }
   };
 
@@ -297,18 +293,6 @@ export const ProfileSettingsModal: React.FC<ProfileSettingsModalProps> = ({
             <span>Data Controls</span>
           </button>
 
-          <button
-            type="button"
-            onClick={() => setActiveTab('account')}
-            className={`py-3 px-2 border-b-2 transition-colors cursor-pointer flex items-center gap-1.5 ${
-              activeTab === 'account'
-                ? 'border-[#1A73D9] text-[#1A73D9] font-bold'
-                : 'border-transparent hover:text-[#0F172A]'
-            }`}
-          >
-            <Cloud className="w-3.5 h-3.5" />
-            <span>Account & Sync</span>
-          </button>
         </div>
 
         {/* Tab Content Panels */}
@@ -610,7 +594,7 @@ export const ProfileSettingsModal: React.FC<ProfileSettingsModalProps> = ({
                   Data Portability & Management
                 </h4>
                 <p className="text-xs text-[#5B6B7F]">
-                  Export or permanently delete your Firebase debriefs, or replay the app walkthrough.
+                  Export your saved debriefs, clear browser data, or replay the app walkthrough.
                 </p>
               </div>
 
@@ -673,16 +657,16 @@ export const ProfileSettingsModal: React.FC<ProfileSettingsModalProps> = ({
                 </button>
               </div>
 
-              {/* Clear Firestore Data (Destructive) */}
+              {/* Clear browser data */}
               <div className="p-4 bg-rose-50/60 border border-rose-200 rounded-2xl space-y-2">
                 <div className="flex items-center justify-between">
                   <div>
                     <span className="text-xs font-bold text-rose-900 block flex items-center gap-1">
                       <AlertTriangle className="w-3.5 h-3.5 text-rose-600" />
-                      <span>Delete All Firebase Debriefs</span>
+                      <span>Clear Saved Data</span>
                     </span>
                     <span className="text-[11px] text-rose-700">
-                      Permanently deletes all {allDebriefs.length} debriefs from your Firebase account.
+                      Permanently deletes saved debriefs, templates, and preferences from this browser.
                     </span>
                   </div>
 
@@ -719,47 +703,6 @@ export const ProfileSettingsModal: React.FC<ProfileSettingsModalProps> = ({
             </div>
           )}
 
-          {/* TAB 4: ACCOUNT & CLOUD */}
-          {activeTab === 'account' && (
-            <div className="space-y-5">
-              <div>
-                <h4 className="text-xs font-bold uppercase tracking-wider text-[#0F172A] mb-1">
-                  Firebase Account
-                </h4>
-                <p className="text-xs text-[#5B6B7F]">
-                  Your account data is stored in Cloud Firestore and scoped to your Google account.
-                </p>
-              </div>
-
-              {/* Status Box */}
-              <div className="p-4 bg-[#F3F9FF] border border-[#CFE6FF] rounded-2xl space-y-3">
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-2.5">
-                    <div className="w-9 h-9 rounded-xl bg-emerald-100 flex items-center justify-center text-emerald-600">
-                      <Cloud className="w-4 h-4" />
-                    </div>
-                    <div>
-                      <span className="text-xs font-bold text-[#0F172A] block">
-                        Connected to Cloud Firestore
-                      </span>
-                      <span className="text-[11px] text-[#5B6B7F]">
-                        Authenticated as {user?.email}
-                      </span>
-                    </div>
-                  </div>
-
-                  <button
-                    type="button"
-                    onClick={signOut}
-                    className="inline-flex items-center gap-1.5 px-3.5 py-2 text-xs font-semibold text-[#0F172A] bg-white border border-[#CFE6FF] rounded-xl hover:bg-[#F3F9FF] transition-all cursor-pointer"
-                  >
-                    <LogOut className="w-3.5 h-3.5" />
-                    <span>Sign Out</span>
-                  </button>
-                </div>
-              </div>
-            </div>
-          )}
         </div>
 
         {/* Modal Footer */}

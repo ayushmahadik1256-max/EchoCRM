@@ -3,7 +3,7 @@ import { CallTemplate } from '../types';
 // Re-export CallTemplate so existing imports from this file still work
 export type { CallTemplate };
 
-/** Built-in system call templates — read-only, not stored in Firestore */
+/** Built-in system call templates — read-only */
 export const CALL_TEMPLATES: CallTemplate[] = [
   {
     id: 'discovery',

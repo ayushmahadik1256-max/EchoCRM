@@ -3,29 +3,25 @@ import {
   Mic,
   History,
   PlusCircle,
-  LogOut,
-  LogIn,
   Sliders,
   Sparkles,
   HelpCircle,
 } from 'lucide-react';
-import { useAuth } from '../hooks/useAuth';
+import { useProfile } from '../hooks/useProfile';
 import { ScrollProgressBar } from './visuals/ScrollProgressBar';
 
 interface NavbarProps {
   currentView: 'landing' | 'new' | 'history' | 'results';
   onNavigate: (view: 'landing' | 'new' | 'history') => void;
-  onRequestSignIn: () => void;
   onUseSampleDirectly: () => void;
 }
 
 export const Navbar: React.FC<NavbarProps> = ({
   currentView,
   onNavigate,
-  onRequestSignIn,
   onUseSampleDirectly,
 }) => {
-  const { user, signOut, openProfileModal } = useAuth();
+  const { openProfileModal } = useProfile();
   const [isScrolled, setIsScrolled] = useState(false);
 
   useEffect(() => {
@@ -112,7 +108,7 @@ export const Navbar: React.FC<NavbarProps> = ({
 
           {/* Zone 3: Settings & Auth Actions */}
           <div className="flex items-center gap-2 shrink-0">
-            {user ? (
+            {(
               <>
                 <button
                   type="button"
@@ -134,28 +130,11 @@ export const Navbar: React.FC<NavbarProps> = ({
                   >
                     <span className="w-2 h-2 rounded-full bg-emerald-500" aria-hidden="true" />
                     <span className="font-semibold max-w-[120px] truncate">
-                      {user.displayName || user.email?.split('@')[0]}
+                      Profile
                     </span>
-                  </button>
-                  <button
-                    onClick={signOut}
-                    className="p-1.5 text-[#5B6B7F] hover:text-[#0F172A] rounded-lg hover:bg-white transition-colors cursor-pointer"
-                    title="Sign out"
-                    aria-label="Sign out"
-                  >
-                    <LogOut className="w-3.5 h-3.5" />
                   </button>
                 </div>
               </>
-            ) : (
-              <button
-                type="button"
-                onClick={onRequestSignIn}
-                className="inline-flex items-center gap-1.5 px-4 py-2 text-xs font-bold text-white bg-[#1A73D9] hover:bg-[#155FB5] rounded-xl shadow-[0_2px_10px_rgba(26,115,217,0.3)] transition-all cursor-pointer min-h-[36px]"
-              >
-                <LogIn className="w-3.5 h-3.5" />
-                <span>Sign in</span>
-              </button>
             )}
           </div>
         </div>
@@ -202,21 +181,13 @@ export const Navbar: React.FC<NavbarProps> = ({
             <span>Ledger</span>
           </button>
 
-          {user ? (
+          {(
             <button
               onClick={openProfileModal}
               className="flex flex-col items-center justify-center py-1.5 px-3 rounded-xl text-[10px] font-semibold text-[#5B6B7F] hover:text-[#1A73D9] transition-all cursor-pointer"
             >
               <Sliders className="w-4 h-4 mb-0.5" />
               <span>Settings</span>
-            </button>
-          ) : (
-            <button
-              onClick={onRequestSignIn}
-              className="flex flex-col items-center justify-center py-1.5 px-3 rounded-xl text-[10px] font-bold text-[#1A73D9] bg-[#E4F1FF] transition-all cursor-pointer"
-            >
-              <LogIn className="w-4 h-4 mb-0.5" />
-              <span>Sign in</span>
             </button>
           )}
         </nav>
